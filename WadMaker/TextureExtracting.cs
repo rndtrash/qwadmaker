@@ -2,11 +2,11 @@
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp;
 using System.Diagnostics;
-using WadMaker.Settings;
+using QWadMaker.Settings;
 using Shared.FileFormats;
 using Shared.FileFormats.Indexed;
 
-namespace WadMaker
+namespace QWadMaker
 {
     public class ExtractionSettings
     {

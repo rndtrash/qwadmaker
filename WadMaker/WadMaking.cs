@@ -4,12 +4,12 @@ using System.Diagnostics;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
-using WadMaker.Settings;
+using QWadMaker.Settings;
 using Shared.FileSystem;
 using FileInfo = Shared.FileSystem.FileInfo;
 using Shared.FileFormats.Indexed;
 
-namespace WadMaker
+namespace QWadMaker
 {
     public static class WadMaking
     {

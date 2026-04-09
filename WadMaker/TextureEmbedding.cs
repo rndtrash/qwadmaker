@@ -1,7 +1,7 @@
 ﻿using Shared;
 using System.Diagnostics;
 
-namespace WadMaker
+namespace QWadMaker
 {
     public static class TextureEmbedding
     {

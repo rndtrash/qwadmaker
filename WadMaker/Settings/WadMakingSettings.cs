@@ -4,7 +4,7 @@ using SixLabors.ImageSharp.PixelFormats;
 using System.Text;
 using System.Text.RegularExpressions;
 
-namespace WadMaker.Settings
+namespace QWadMaker.Settings
 {
     /// <summary>
     /// A collection of texture settings rules, coming from a 'wadmaker.config' file.
@@ -15,7 +15,7 @@ namespace WadMaker.Settings
     /// </summary>
     class WadMakingSettings
     {
-        const string ConfigFilename = "wadmaker.config";
+        const string ConfigFilename = "qwadmaker.config";
 
 
         class Rule

@@ -2,9 +2,9 @@
 using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
-using WadMaker.Settings;
+using QWadMaker.Settings;
 
-namespace WadMaker
+namespace QWadMaker
 {
     public class FontData
     {

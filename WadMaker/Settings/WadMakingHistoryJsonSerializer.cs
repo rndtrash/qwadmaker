@@ -5,7 +5,7 @@ using System.Text.Json;
 using Shared.JSON;
 using FileInfo = Shared.FileSystem.FileInfo;
 
-namespace WadMaker.Settings
+namespace QWadMaker.Settings
 {
     class WadMakingHistoryJsonSerializer : JsonConverter<WadMakingHistory>
     {

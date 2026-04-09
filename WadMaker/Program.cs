@@ -5,7 +5,7 @@ using Shared;
 using System.Diagnostics.CodeAnalysis;
 using Shared.FileFormats;
 
-namespace WadMaker
+namespace QWadMaker
 {
     class ProgramSettings
     {

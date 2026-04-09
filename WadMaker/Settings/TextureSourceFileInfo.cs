@@ -1,6 +1,6 @@
 ﻿using Shared.FileSystem;
 
-namespace WadMaker.Settings
+namespace QWadMaker.Settings
 {
     class TextureSourceFileInfo : Shared.FileSystem.FileInfo
     {

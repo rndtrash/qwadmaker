@@ -1,7 +1,7 @@
 ﻿using Shared;
 using SixLabors.ImageSharp.PixelFormats;
 
-namespace WadMaker.Settings
+namespace QWadMaker.Settings
 {
     enum MipmapLevel
     {

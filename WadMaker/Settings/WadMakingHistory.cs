@@ -2,7 +2,7 @@
 using System.Text.Json;
 using FileInfo = Shared.FileSystem.FileInfo;
 
-namespace WadMaker.Settings
+namespace QWadMaker.Settings
 {
     class WadMakingHistory
     {
@@ -16,7 +16,7 @@ namespace WadMaker.Settings
         }
 
 
-        const string HistoryFilename = "wadmaker.dat";
+        const string HistoryFilename = "qwadmaker.dat";
 
 
         public FileInfo OutputFile { get; }
