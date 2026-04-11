@@ -5,19 +5,33 @@ namespace Shared
 {
     public static class Bsp
     {
+        public const int VERSION = 29;
+
         /// <summary>
         /// Reads embedded textures from the specified bsp file.
         /// </summary>
-        public static List<Texture> GetEmbeddedTextures(string path)
+        public static List<Texture> GetEmbeddedTextures(string path, string palettePath)
         {
-            using (var file = File.OpenRead(path))
-                return GetEmbeddedTextures(file);
+            Rgba32[] palette;
+            using (var paletteFile = File.OpenRead(palettePath))
+            {
+                palette = [.. Enumerable.Range(0, 256).Select(i => paletteFile.ReadColor())];
+            }
+
+            using var file = File.OpenRead(path);
+            return GetEmbeddedTextures(file, palette);
         }
 
-        public static List<Texture> GetEmbeddedTextures(Stream stream)
+        public static List<Texture> GetEmbeddedTextures(Stream stream, Rgba32[] palette)
         {
             var bspHeader = ReadBspHeader(stream);
-            var textureLumpOffset = bspHeader.Lumps[TexturesLumpIndex].Offset;
+            var textureLump = bspHeader.Lumps[TexturesLumpIndex];
+            if (textureLump.Length <= 0)
+            {
+                // The map has no textures
+                return [];
+            }
+            var textureLumpOffset = textureLump.Offset;
 
             stream.Seek(textureLumpOffset, SeekOrigin.Begin);
             var textureOffsets = ReadTextureOffsets(stream);
@@ -33,6 +47,7 @@ namespace Shared
                 var texture = ReadTexture(stream);
                 if (texture.ImageData == null)
                     continue;
+                texture.Palette = palette;
 
                 textures.Add(Texture.CreateMipmapTexture(
                     texture.Name,
@@ -183,12 +198,10 @@ namespace Shared
         {
             var header = new BspHeader();
             header.Version = stream.ReadInt();
-            if (header.Version != 30)
-                throw new NotSupportedException("Only BSP v30 is supported.");
+            if (header.Version != VERSION)
+                throw new NotSupportedException($"Only BSP v{VERSION} is supported.");
 
-            header.Lumps = Enumerable.Range(0, 15)
-                .Select(i => new Lump { Offset = stream.ReadInt(), Length = stream.ReadInt() })
-                .ToArray();
+            header.Lumps = [.. Enumerable.Range(0, 15).Select(i => new Lump { Offset = stream.ReadInt(), Length = stream.ReadInt() })];
 
             return header;
         }
@@ -202,9 +215,7 @@ namespace Shared
         private static int[] ReadTextureOffsets(Stream stream)
         {
             var textureCount = stream.ReadInt();
-            return Enumerable.Range(0, textureCount)
-                .Select(i => stream.ReadInt())
-                .ToArray();
+            return [.. Enumerable.Range(0, textureCount).Select(i => stream.ReadInt())];
         }
 
         private static BspTexture ReadTexture(Stream stream)
@@ -233,10 +244,6 @@ namespace Shared
                 stream.Seek(textureOffset + imageDataOffsets[j], SeekOrigin.Begin);
                 texture.ImageData[j] = stream.ReadBytes((int)(texture.Width * texture.Height) >> (j * 2));
             }
-            var paletteSize = stream.ReadUshort();
-            texture.Palette = Enumerable.Range(0, paletteSize)
-                .Select(i => stream.ReadColor())
-                .ToArray();
 
             return texture;
         }

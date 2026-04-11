@@ -2,5 +2,6 @@
   <Project Path="ModelTextureMaker/ModelTextureMaker.csproj" />
   <Project Path="Shared/Shared.csproj" />
   <Project Path="SpriteMaker/SpriteMaker.csproj" />
-  <Project Path="WadMaker/QWadMaker.csproj" />
+  <Project Path="QWadMaker.Tests/QWadMaker.Tests.csproj" />
+  <Project Path="QWadMaker/QWadMaker.csproj" />
 </Solution>

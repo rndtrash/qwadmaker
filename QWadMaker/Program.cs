@@ -24,6 +24,7 @@ namespace QWadMaker
         public bool ExtractAsIndexed { get; set; }          // -indexed         Extracted images are indexed and contain the original texture's palette. Only works with png, gif and bmp.
 
         [MemberNotNullWhen(true, nameof(InputFilePath))]
+        [MemberNotNullWhen(true, nameof(InputPalette))]
         [MemberNotNullWhen(true, nameof(OutputFilePath))]
         public bool ExtractToWad { get; set; }              //                  This extraction mode is enabled when the first argument is a bsp file path, and the second a wad file path.
 
@@ -40,9 +41,11 @@ namespace QWadMaker
         // Other settings:
         public string? InputDirectory { get; set; }         // Build mode only
         public string? InputFilePath { get; set; }          // Wad or bsp path
+        public string? InputPalette { get; set; }           // LMP path
         public string? ExtraInputFilePath { get; set; }     // Bsp path (when embedding textures)
         public string? OutputDirectory { get; set; }        // Extract mode only
         public string? OutputFilePath { get; set; }         // Output bsp path (when adding or removing embedded textures)
+        public string? OutputPalettePath { get; set; }      // Output LMP path
 
         public bool DisableFileLogging { get; set; }        // -nologfile   disables logging to a file (parent-directory\wadmaker.log)
     }
@@ -79,11 +82,11 @@ namespace QWadMaker
                         OutputFormat = settings.OutputImageFormat,
                         SaveAsIndexed = settings.ExtractAsIndexed,
                     };
-                    TextureExtracting.ExtractTextures(settings.InputFilePath, settings.OutputDirectory, extractionSettings, logger);
+                    TextureExtracting.ExtractTextures(settings.InputFilePath, settings.InputPalette, settings.OutputDirectory, extractionSettings, logger);
                 }
                 else if (settings.ExtractToWad)
                 {
-                    TextureExtracting.ExtractEmbeddedTexturesToWad(settings.InputFilePath, settings.OutputFilePath, logger);
+                    TextureExtracting.ExtractEmbeddedTexturesToWad(settings.InputFilePath, settings.InputPalette, settings.OutputFilePath, logger);
                 }
                 else if (settings.EmbedTextures)
                 {
@@ -185,6 +188,7 @@ namespace QWadMaker
             {
                 // Embedded texture extraction to wad file requires a bsp file path and an output wad file path:
                 settings.InputFilePath = args[index++];
+                settings.InputPalette = args[index++];
                 settings.OutputFilePath = args[index++];
             }
             else if (settings.EmbedTextures)

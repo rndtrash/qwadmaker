@@ -2,6 +2,8 @@
 {
     public class Wad
     {
+        const string MAGIC = "WAD2";
+
         public List<Texture> Textures { get; } = new List<Texture>();
 
 
@@ -13,7 +15,7 @@
 
         public void Save(Stream stream)
         {
-            stream.Write("WAD3");
+            stream.Write(MAGIC);
             stream.Write((uint)Textures.Count);
 
             var textureOffset = (uint)(stream.Position + 4);
@@ -56,8 +58,8 @@
             var wad = new Wad();
 
             var fileSignature = stream.ReadString(4);
-            if (fileSignature != "WAD3")
-                throw new InvalidDataException($"Expected file to start with 'WAD3' but found '{fileSignature}'.");
+            if (fileSignature != MAGIC)
+                throw new InvalidDataException($"Expected file to start with '{MAGIC}' but found '{fileSignature}'.");
 
             var textureCount = stream.ReadUint();
 

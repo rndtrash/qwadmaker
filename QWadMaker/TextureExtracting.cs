@@ -24,7 +24,7 @@ namespace QWadMaker
         private const int FirstFullbrightPaletteIndex = 224;
 
 
-        public static void ExtractTextures(string inputFilePath, string outputDirectory, ExtractionSettings settings, Logger logger)
+        public static void ExtractTextures(string inputFilePath, string? inputPalettePath, string outputDirectory, ExtractionSettings settings, Logger logger)
         {
             var stopwatch = Stopwatch.StartNew();
 
@@ -33,10 +33,15 @@ namespace QWadMaker
             var imageFilesCreated = 0;
 
             List<Texture> textures;
-            if (Path.GetExtension(inputFilePath).ToLowerInvariant() == ".bsp")
+            if (Path.GetExtension(inputFilePath).Equals(".bsp", StringComparison.InvariantCultureIgnoreCase))
             {
                 logger.Log($"Loading bsp file: '{inputFilePath}'.");
-                textures = Bsp.GetEmbeddedTextures(inputFilePath);
+                if (inputPalettePath == null)
+                {
+                    logger.Log("- ERROR: no palette specified, couldn't extract the textures from BSP");
+                    return;
+                }
+                textures = Bsp.GetEmbeddedTextures(inputFilePath, inputPalettePath);
             }
             else
             {
@@ -125,14 +130,14 @@ namespace QWadMaker
             logger.Log($"Extracted {imageFilesCreated} images from {textures.Count} textures from '{inputFilePath}' to '{outputDirectory}', in {stopwatch.Elapsed.TotalSeconds:0.000} seconds.");
         }
 
-        public static void ExtractEmbeddedTexturesToWad(string inputBspFilePath, string outputWadFilePath, Logger logger)
+        public static void ExtractEmbeddedTexturesToWad(string inputBspFilePath, string inputPaletteFilePath, string outputWadFilePath, Logger logger)
         {
             var stopwatch = Stopwatch.StartNew();
 
-            logger.Log($"Extracting embedded textures from '{inputBspFilePath}' to '{outputWadFilePath}'.");
+            logger.Log($"Extracting embedded textures from '{inputBspFilePath}' to '{outputWadFilePath}' with palette '{inputPaletteFilePath}'.");
 
             var wad = new Wad();
-            var embeddedTextures = Bsp.GetEmbeddedTextures(inputBspFilePath);
+            var embeddedTextures = Bsp.GetEmbeddedTextures(inputBspFilePath, inputPaletteFilePath);
             wad.Textures.AddRange(embeddedTextures);
 
             // NOTE: The output file will be overwritten if it already exists:
