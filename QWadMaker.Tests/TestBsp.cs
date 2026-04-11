@@ -34,14 +34,17 @@ public sealed class TestBsp
         };
         TextureExtracting.ExtractTextures(GetDataPath("quake_minimal.bsp"), GetDataPath("palette.lmp"), outputPath, extractionSettings, Logger);
 
-        var targetTextures = Directory.GetFiles(GetDataPath("bsp_textures"));
-        var outputTextures = Directory.GetFiles(outputPath);
-        CollectionAssert.AreEquivalent(targetTextures.Select(file => Path.GetFileName(file)).ToArray(), outputTextures.Select(file => Path.GetFileName(file)).ToArray());
+        // Check that both the reference folder and the output folder have the exact same set of files
+        var targetTexturePaths = Directory.GetFiles(GetDataPath("bsp_textures"));
+        var outputTexturePaths = Directory.GetFiles(outputPath);
+        var textureNames = targetTexturePaths.Select(file => Path.GetFileName(file)).ToArray();
+        var outputTextureNames = outputTexturePaths.Select(file => Path.GetFileName(file)).ToArray();
+        CollectionAssert.AreEquivalent(textureNames, outputTextureNames);
 
-        for (var i = 0; i < targetTextures.Length; i++)
+        foreach (var textureName in textureNames)
         {
-            var targetTexture = File.ReadAllBytes(targetTextures[i]);
-            var outputTexture = File.ReadAllBytes(outputTextures[i]);
+            var targetTexture = File.ReadAllBytes(GetDataPath(Path.Combine("bsp_textures", textureName)));
+            var outputTexture = File.ReadAllBytes(GetOutputPath(Path.Combine("bsp_extract", textureName)));
             CollectionAssert.AreEqual(targetTexture, outputTexture);
         }
     }
