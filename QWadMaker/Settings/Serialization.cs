@@ -11,6 +11,7 @@ namespace QWadMaker.Settings
             {
                 LumpType.Palette => "palette",
                 LumpType.SimpleTexture => "qpic",
+                LumpType.FlatTexture => "flat",
                 LumpType.Font => "font",
                 _ => "mipmap",
             };
@@ -23,9 +24,10 @@ namespace QWadMaker.Settings
 
             return str.ToLowerInvariant() switch
             {
-                "mipmap" => (LumpType?)LumpType.MipmapTexture,
-                "qpic" => (LumpType?)LumpType.SimpleTexture,
-                "font" => (LumpType?)LumpType.Font,
+                "mipmap" => LumpType.MipmapTexture,
+                "qpic" => LumpType.SimpleTexture,
+                "flat" => LumpType.FlatTexture,
+                "font" => LumpType.Font,
                 _ => throw new InvalidDataException($"Invalid texture type: '{str}'."),
             };
         }

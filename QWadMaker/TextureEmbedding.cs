@@ -9,15 +9,16 @@ namespace QWadMaker
         {
             var stopwatch = Stopwatch.StartNew();
 
-            if (Path.GetExtension(wadFilePath).ToLowerInvariant() != ".wad")
+            if (!Path.GetExtension(wadFilePath).Equals(".wad", StringComparison.InvariantCultureIgnoreCase))
                 throw new InvalidUsageException($"Updating embedded textures requires a source .wad file.");
 
-            if (Path.GetExtension(bspFilePath).ToLowerInvariant() != ".bsp")
+            if (!Path.GetExtension(bspFilePath).Equals(".bsp", StringComparison.InvariantCultureIgnoreCase))
                 throw new InvalidUsageException($"Updating embedded textures requires a target .bsp file.");
 
             logger.Log($"Updating embedded textures in '{bspFilePath}', using textures from '{wadFilePath}', and saving the result to '{outputFilePath}'.");
 
-            var wadFile = Wad.Load(wadFilePath, (index, name, exception) => logger.Log($"- Failed to load texture #{index} ('{name}'): {exception.GetType().Name}: '{exception.Message}'."));
+            // We don't need to know the palette in order to embed the textures into a .BSP
+            var wadFile = Wad.Load(wadFilePath, null, (index, name, exception) => logger.Log($"- Failed to load texture #{index} ('{name}'): {exception.GetType().Name}: '{exception.Message}'."));
             var embeddedTextureCount = Bsp.EmbedTextures(wadFile, bspFilePath, outputFilePath);
 
             logger.Log($"Embedded {embeddedTextureCount} textures in '{bspFilePath}', using textures from '{wadFilePath}', in {stopwatch.Elapsed.TotalSeconds:0.000} seconds.");
@@ -27,7 +28,7 @@ namespace QWadMaker
         {
             var stopwatch = Stopwatch.StartNew();
 
-            if (Path.GetExtension(bspFilePath).ToLowerInvariant() != ".bsp")
+            if (!Path.GetExtension(bspFilePath).Equals(".bsp", StringComparison.InvariantCultureIgnoreCase))
                 throw new InvalidUsageException("Removing embedded textures requires a .bsp file.");
 
             logger.Log($"Removing embedded textures from '{bspFilePath}' and saving the result to '{outputFilePath}'.");

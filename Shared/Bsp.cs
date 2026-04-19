@@ -1,5 +1,4 @@
-﻿using SixLabors.ImageSharp.PixelFormats;
-using System.Diagnostics.CodeAnalysis;
+﻿using System.Diagnostics.CodeAnalysis;
 
 namespace Shared
 {
@@ -10,14 +9,13 @@ namespace Shared
         /// <summary>
         /// Reads embedded textures from the specified bsp file.
         /// </summary>
-        public static List<Texture> GetEmbeddedTextures(string path, string palettePath)
+        public static List<Texture> GetEmbeddedTextures(string path)
         {
-            var palette = Lmp.Read(palettePath);
             using var file = File.OpenRead(path);
-            return GetEmbeddedTextures(file, palette);
+            return GetEmbeddedTextures(file);
         }
 
-        public static List<Texture> GetEmbeddedTextures(Stream stream, Rgba32[] palette)
+        public static List<Texture> GetEmbeddedTextures(Stream stream)
         {
             var bspHeader = ReadBspHeader(stream);
             var textureLump = bspHeader.Lumps[TexturesLumpIndex];
@@ -42,14 +40,12 @@ namespace Shared
                 var texture = ReadTexture(stream);
                 if (texture.ImageData == null)
                     continue;
-                texture.Palette = palette;
 
                 textures.Add(Texture.CreateMipmapTexture(
                     texture.Name,
                     (int)texture.Width,
                     (int)texture.Height,
                     texture.ImageData[0],
-                    texture.Palette,
                     texture.ImageData[1],
                     texture.ImageData[2],
                     texture.ImageData[3]));
@@ -63,7 +59,7 @@ namespace Shared
         /// </summary>
         public static int EmbedTextures(Wad wadFile, string bspFilePath, string? outputPath = null)
         {
-            var wadTextures = wadFile.Textures.ToDictionary(texture => texture.Name.ToLowerInvariant(), texture => texture);   // TODO: Case-insensitive key lookup!
+            var wadTextures = wadFile.Textures.ToDictionary(texture => texture.Name, texture => texture, StringComparer.InvariantCultureIgnoreCase);
 
             // Read all bsp lump contents:
             var lumps = new List<Lump>();
@@ -99,7 +95,6 @@ namespace Shared
                             wadTexture.Mipmap2Data,
                             wadTexture.Mipmap3Data,
                         ];
-                        bspTexture.Palette = wadTexture.Palette;
                         embeddedTextureCount += 1;
                     }
                     bspTextures[i] = bspTexture;
@@ -161,7 +156,6 @@ namespace Shared
                     if (bspTexture.IsEmbedded)
                     {
                         bspTexture.ImageData = null;
-                        bspTexture.Palette = null;
                         removedTextureCount += 1;
                     }
                     bspTextures[i] = bspTexture;
@@ -306,8 +300,7 @@ namespace Shared
                     stream.Write(offset);
                     if (texture.Value.IsEmbedded)
                     {
-                        offset += 40 + texture.Value.ImageData.Sum(imageData => imageData!.Length) + 2 + texture.Value.Palette.Length * 3;
-                        offset += StreamExtensions.RequiredPadding(2 + texture.Value.Palette.Length * 3, 4);
+                        offset += 40 + texture.Value.ImageData.Sum(imageData => imageData!.Length);
                     }
                     else
                     {
@@ -343,11 +336,6 @@ namespace Shared
                     if (imageData != null)
                         stream.Write(imageData);
                 }
-
-                stream.Write((ushort)texture.Palette.Length);
-                foreach (var color in texture.Palette)
-                    stream.Write(color);
-                stream.Write(new byte[StreamExtensions.RequiredPadding(2 + texture.Palette.Length * 3, 4)]);
             }
         }
 
@@ -374,11 +362,9 @@ namespace Shared
             public uint Height;
 
             public byte[]?[]? ImageData;
-            public Rgba32[]? Palette;
 
             [MemberNotNullWhen(true, nameof(ImageData))]
-            [MemberNotNullWhen(true, nameof(Palette))]
-            public readonly bool IsEmbedded => ImageData != null && ImageData.All(data => data != null) && Palette != null;
+            public readonly bool IsEmbedded => ImageData != null && ImageData.All(data => data != null);
         }
     }
 }

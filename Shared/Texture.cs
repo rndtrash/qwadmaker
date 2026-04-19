@@ -1,13 +1,11 @@
-﻿using SixLabors.ImageSharp.PixelFormats;
-
-namespace Shared
+﻿namespace Shared
 {
     public enum LumpType : byte
     {
         Palette = 0x40,
-        // TODO: Quake-specific lump types
         SimpleTexture = 0x42,
         MipmapTexture = 0x44,
+        FlatTexture = 0x45,
         Font = 0x46,
     }
 
@@ -32,7 +30,6 @@ namespace Shared
             int width,
             int height,
             byte[]? imageData = null,
-            IEnumerable<Rgba32>? palette = null,
             byte[]? mipmap1Data = null,
             byte[]? mipmap2Data = null,
             byte[]? mipmap3Data = null)
@@ -43,9 +40,9 @@ namespace Shared
             if (mipmap1Data != null && mipmap1Data.Length != width * height / 4) throw new ArgumentException("Mipmap 1 data must be 'width/2 x height/2' bytes.", nameof(mipmap1Data));
             if (mipmap2Data != null && mipmap2Data.Length != width * height / 16) throw new ArgumentException("Mipmap 2 data must be 'width/4 x height/4' bytes.", nameof(mipmap2Data));
             if (mipmap3Data != null && mipmap3Data.Length != width * height / 64) throw new ArgumentException("Mipmap 3 data must be 'width/8 x height/8' bytes.", nameof(mipmap3Data));
-            if (palette != null && palette.Count() > Constants.MaxPaletteSize) throw new ArgumentException($"Palette must not contain more than {Constants.MaxPaletteSize} colors.", nameof(palette));
 
-            return new Texture(LumpType.MipmapTexture, name, width, height, imageData ?? new byte[width * height], palette?.ToArray() ?? new Rgba32[Constants.MaxPaletteSize]) {
+            return new Texture(LumpType.MipmapTexture, name, width, height, imageData ?? new byte[width * height])
+            {
                 Mipmap1Data = mipmap1Data ?? new byte[width * height / 4],
                 Mipmap2Data = mipmap2Data ?? new byte[width * height / 16],
                 Mipmap3Data = mipmap3Data ?? new byte[width * height / 64],
@@ -56,14 +53,12 @@ namespace Shared
             string name,
             int width,
             int height,
-            byte[]? imageData = null,
-            IEnumerable<Rgba32>? palette = null)
+            byte[]? imageData = null)
         {
             if (width < 1 || height < 1) throw new ArgumentException("Width and height must be greater than zero.");
             if (imageData != null && imageData.Length != width * height) throw new ArgumentException("Image data must be 'width x height' bytes.", nameof(imageData));
-            if (palette != null && palette.Count() > Constants.MaxPaletteSize) throw new ArgumentException($"Palette must not contain more than {Constants.MaxPaletteSize} colors.", nameof(palette));
 
-            return new Texture(LumpType.SimpleTexture, name, width, height, imageData ?? new byte[width * height], palette?.ToArray() ?? new Rgba32[Constants.MaxPaletteSize]);
+            return new Texture(LumpType.SimpleTexture, name, width, height, imageData ?? new byte[width * height]);
         }
 
         public static Texture CreateFont(
@@ -73,8 +68,7 @@ namespace Shared
             int rowCount,
             int charHeight,
             IEnumerable<CharInfo> charInfos,
-            byte[]? imageData = null,
-            IEnumerable<Rgba32>? palette = null)
+            byte[]? imageData = null)
         {
             if (width != Constants.FontImageWidth) throw new ArgumentException($"Width must be {Constants.FontImageWidth}.", nameof(width));
             if (height < 1) throw new ArgumentException("Height must be greater than zero.", nameof(height));
@@ -82,9 +76,9 @@ namespace Shared
             if (rowCount < 1) throw new ArgumentException("Character height must be greater than zero.", nameof(charHeight));
             if (charInfos.Count() != Constants.FontCharacterCount) throw new ArgumentException($"Exactly {Constants.FontCharacterCount} char infos must be provided.", nameof(charInfos));
             if (imageData != null && imageData.Length != width * height) throw new ArgumentException("Image data must be 'width x height' bytes.", nameof(imageData));
-            if (palette != null && palette.Count() > Constants.MaxPaletteSize) throw new ArgumentException($"Palette must not contain more than {Constants.MaxPaletteSize} colors.", nameof(palette));
 
-            return new Texture(LumpType.Font, name, width, height, imageData ?? new byte[width * height], palette?.ToArray() ?? new Rgba32[Constants.MaxPaletteSize]) {
+            return new Texture(LumpType.Font, name, width, height, imageData ?? new byte[width * height])
+            {
                 RowCount = rowCount,
                 CharHeight = charHeight,
                 CharInfos = charInfos?.ToArray() ?? new CharInfo[Constants.FontCharacterCount],
@@ -109,43 +103,31 @@ namespace Shared
         public int CharHeight { get; private set; }
         public CharInfo[]? CharInfos { get; private set; }
 
-        // Texture and Font only:
-        public Rgba32[] Palette { get; }
 
-
-        private Texture(LumpType type, string name, int width, int height, byte[] imageData, Rgba32[] palette)
+        private Texture(LumpType type, string name, int width, int height, byte[] imageData)
         {
             Type = type;
             Name = name;
             Width = width;
             Height = height;
             ImageData = imageData;
-            Palette = palette;
         }
 
         public byte[]? GetImageData(int mipmapLevel = 0)
         {
-            switch (mipmapLevel)
+            return mipmapLevel switch
             {
-                default:
-                case 0: return ImageData;
-                case 1: return Mipmap1Data;
-                case 2: return Mipmap2Data;
-                case 3: return Mipmap3Data;
-            }
+                1 => Mipmap1Data,
+                2 => Mipmap2Data,
+                3 => Mipmap3Data,
+                _ => ImageData,
+            };
         }
     }
 
-    public struct CharInfo
+    public struct CharInfo(int startOffset, int charWidth)
     {
-        public int StartOffset;
-        public int CharWidth;
-
-
-        public CharInfo(int startOffset, int charWidth)
-        {
-            StartOffset = startOffset;
-            CharWidth = charWidth;
-        }
+        public int StartOffset = startOffset;
+        public int CharWidth = charWidth;
     }
 }

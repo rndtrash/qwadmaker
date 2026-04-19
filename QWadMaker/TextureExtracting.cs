@@ -32,26 +32,25 @@ namespace QWadMaker
 
             var imageFilesCreated = 0;
 
-            List<Texture> textures;
+            List<Texture> textures = [];
+            Rgba32[] palette = [];
             if (Path.GetExtension(inputFilePath).Equals(".bsp", StringComparison.InvariantCultureIgnoreCase))
             {
                 logger.Log($"Loading bsp file: '{inputFilePath}'.");
-                if (inputPalettePath == null)
-                {
-                    logger.Log("- ERROR: no palette specified, couldn't extract the textures from BSP");
-                    return;
-                }
-                textures = Bsp.GetEmbeddedTextures(inputFilePath, inputPalettePath);
+                textures = Bsp.GetEmbeddedTextures(inputFilePath);
+                palette = inputPalettePath != null ? Palette.Read(inputPalettePath) : Palette.DefaultQuakePalette;
             }
             else
             {
                 logger.Log($"Loading wad file: '{inputFilePath}'.");
-                var wadFile = Wad.Load(inputFilePath, (index, name, exception) => logger.Log($"- Failed to load texture #{index} ('{name}'): {exception.GetType().Name}: '{exception.Message}'."));
+                var wadFile = Wad.Load(inputFilePath, inputPalettePath, (index, name, exception) => logger.Log($"- Failed to load texture #{index} ('{name}'): {exception.GetType().Name}: '{exception.Message}'."));
                 textures = wadFile.Textures;
+                palette = wadFile.Palette;
             }
 
             Util.CreateDirectory(outputDirectory);
 
+            // TODO: Implement the Quake-specific code
             var isDecalsWad = Path.GetFileName(inputFilePath).Equals("decals.wad", StringComparison.InvariantCultureIgnoreCase);
             foreach (var texture in textures)
             {
@@ -81,14 +80,16 @@ namespace QWadMaker
                             var textureData = texture.GetImageData(mipmap);
                             if (textureData is not null)
                             {
-                                var indexedImage = new IndexedImage(textureData, texture.Width >> mipmap, texture.Height >> mipmap, texture.Palette);
+                                var indexedImage = new IndexedImage(textureData, texture.Width >> mipmap, texture.Height >> mipmap, palette);
                                 ImageFileIO.SaveIndexedImage(indexedImage, filePath, settings.OutputFormat);
                                 imageFilesCreated += 1;
                             }
                         }
                         else
                         {
-                            using (var image = isDecalsWad ? DecalTextureToImage(texture, mipmap) : TextureToImage(texture, mipmap))
+                            // TODO: Quake-specific code
+                            //using (var image = isDecalsWad ? DecalTextureToImage(texture, mipmap) : TextureToImage(texture, palette, mipmap))
+                            using (var image = TextureToImage(texture, palette, mipmap))
                             {
                                 if (image != null)
                                 {
@@ -109,13 +110,11 @@ namespace QWadMaker
                                     continue;
                                 }
 
-                                using (var image = TextureToFullbrightMaskImage(texture, mipmap))
+                                using var image = TextureToFullbrightMaskImage(texture, palette, mipmap);
+                                if (image != null)
                                 {
-                                    if (image != null)
-                                    {
-                                        ImageFileIO.SaveImage(image, fullbrightFilePath, settings.OutputFormat);
-                                        imageFilesCreated += 1;
-                                    }
+                                    ImageFileIO.SaveImage(image, fullbrightFilePath, settings.OutputFormat);
+                                    imageFilesCreated += 1;
                                 }
                             }
                         }
@@ -130,15 +129,15 @@ namespace QWadMaker
             logger.Log($"Extracted {imageFilesCreated} images from {textures.Count} textures from '{inputFilePath}' to '{outputDirectory}', in {stopwatch.Elapsed.TotalSeconds:0.000} seconds.");
         }
 
-        public static void ExtractEmbeddedTexturesToWad(string inputBspFilePath, string inputPaletteFilePath, string outputWadFilePath, Logger logger)
+        public static void ExtractEmbeddedTexturesToWad(string inputBspFilePath, string? inputPaletteFilePath, string outputWadFilePath, Logger logger)
         {
             var stopwatch = Stopwatch.StartNew();
 
-            logger.Log($"Extracting embedded textures from '{inputBspFilePath}' to '{outputWadFilePath}' with palette '{inputPaletteFilePath}'.");
+            logger.Log($"Extracting embedded textures from '{inputBspFilePath}' to '{outputWadFilePath}' with {(inputPaletteFilePath != null ? "palette '{inputPaletteFilePath}'" : "the default Quake palette")}.");
 
-            var wad = new Wad();
-            var embeddedTextures = Bsp.GetEmbeddedTextures(inputBspFilePath, inputPaletteFilePath);
-            wad.Textures.AddRange(embeddedTextures);
+            var embeddedTextures = Bsp.GetEmbeddedTextures(inputBspFilePath);
+            var palette = inputPaletteFilePath != null ? Palette.Read(inputPaletteFilePath) : Palette.DefaultQuakePalette;
+            var wad = new Wad(palette, embeddedTextures);
 
             // NOTE: The output file will be overwritten if it already exists:
             Util.CreateDirectory(Path.GetDirectoryName(outputWadFilePath));
@@ -167,34 +166,34 @@ namespace QWadMaker
             }
         }
 
-        private static Image<Rgba32>? DecalTextureToImage(Texture texture, int mipmap = 0)
-        {
-            var imageData = texture.GetImageData(mipmap);
-            if (imageData == null)
-                return null;
+        //private static Image<Rgba32>? DecalTextureToImage(Texture texture, int mipmap = 0)
+        //{
+        //    var imageData = texture.GetImageData(mipmap);
+        //    if (imageData == null)
+        //        return null;
 
-            var width = texture.Width >> mipmap;
-            var height = texture.Height >> mipmap;
-            var decalColor = texture.Palette[Constants.DecalColorIndex];
+        //    var width = texture.Width >> mipmap;
+        //    var height = texture.Height >> mipmap;
+        //    var decalColor = texture.Palette[Constants.DecalColorIndex];
 
-            var image = new Image<Rgba32>(width, height);
-            image.ProcessPixelRows(accessor =>
-            {
-                for (int y = 0; y < image.Height; y++)
-                {
-                    var rowSpan = accessor.GetRowSpan(y);
-                    for (int x = 0; x < image.Width; x++)
-                    {
-                        var paletteIndex = imageData[y * width + x];
-                        rowSpan[x] = new Rgba32(decalColor.R, decalColor.G, decalColor.B, paletteIndex);
-                    }
-                }
-            });
+        //    var image = new Image<Rgba32>(width, height);
+        //    image.ProcessPixelRows(accessor =>
+        //    {
+        //        for (int y = 0; y < image.Height; y++)
+        //        {
+        //            var rowSpan = accessor.GetRowSpan(y);
+        //            for (int x = 0; x < image.Width; x++)
+        //            {
+        //                var paletteIndex = imageData[y * width + x];
+        //                rowSpan[x] = new Rgba32(decalColor.R, decalColor.G, decalColor.B, paletteIndex);
+        //            }
+        //        }
+        //    });
 
-            return image;
-        }
+        //    return image;
+        //}
 
-        private static Image<Rgba32>? TextureToImage(Texture texture, int mipmap = 0)
+        private static Image<Rgba32>? TextureToImage(Texture texture, Rgba32[] palette, int mipmap = 0)
         {
             var imageData = texture.GetImageData(mipmap);
             if (imageData == null)
@@ -219,7 +218,7 @@ namespace QWadMaker
                         }
                         else
                         {
-                            rowSpan[x] = texture.Palette[paletteIndex];
+                            rowSpan[x] = palette[paletteIndex];
                         }
                     }
                 }
@@ -228,7 +227,7 @@ namespace QWadMaker
             return image;
         }
 
-        private static Image<Rgba32>? TextureToFullbrightMaskImage(Texture texture, int mipmap = 0)
+        private static Image<Rgba32>? TextureToFullbrightMaskImage(Texture texture, Rgba32[] palette, int mipmap = 0)
         {
             var imageData = texture.GetImageData(mipmap);
             if (imageData == null)
@@ -252,7 +251,7 @@ namespace QWadMaker
                         }
                         else
                         {
-                            rowSpan[x] = texture.Palette[paletteIndex];
+                            rowSpan[x] = palette[paletteIndex];
                         }
                     }
                 }
@@ -267,14 +266,15 @@ namespace QWadMaker
                 return new TextureSettings { MipmapLevel = (MipmapLevel)mipmap };
 
             var settings = new TextureSettings { TextureType = texture.Type };
-            if (TextureName.IsWater(texture.Name))
-            {
-                settings.WaterFogColor = new Rgba32(
-                    texture.Palette[3].R,
-                    texture.Palette[3].G,
-                    texture.Palette[3].B,
-                    texture.Palette[4].R);
-            }
+            // TODO: Quake-specific code... water fog???
+            //if (TextureName.IsWater(texture.Name))
+            //{
+            //    settings.WaterFogColor = new Rgba32(
+            //        texture.Palette[3].R,
+            //        texture.Palette[3].G,
+            //        texture.Palette[3].B,
+            //        texture.Palette[4].R);
+            //}
             return settings;
         }
     }

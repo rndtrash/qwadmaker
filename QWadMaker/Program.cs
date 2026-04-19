@@ -108,17 +108,11 @@ namespace QWadMaker
                     };
                     extract.Add(outputFilePath);
 
-                    Option<string> inputPalettePath = new("--input-palette")
+                    Option<string> inputPalettePath = new("--palette")
                     {
-                        Description = "Path to the input .lmp palette (required when extracting textures from a .bsp file)"
+                        Description = "Path to the input .lmp palette. If not defined, then the default Quake palette is used."
                     };
                     extract.Add(inputPalettePath);
-
-                    Option<string> outputPalettePath = new("--output-palette")
-                    {
-                        Description = "Path to the output .lmp palette (used when extracting a .wad file)"
-                    };
-                    extract.Add(outputPalettePath);
 
                     Option<bool> extractMipmaps = new("--mipmaps")
                     {
@@ -154,6 +148,7 @@ namespace QWadMaker
                     {
                         var input = result.GetRequiredValue(inputFilePath);
                         var output = result.GetValue(outputFilePath);
+                        var inputPalette = result.GetValue(inputPalettePath);
 
                         SetupLogging(result, input);
 
@@ -164,20 +159,11 @@ namespace QWadMaker
                             // If the output file is set to a .wad file, then we call a special extraction method
                             if (inputIsBsp && output != null && Path.GetExtension(output).Equals(".wad", StringComparison.InvariantCultureIgnoreCase))
                             {
-                                TextureExtracting.ExtractEmbeddedTexturesToWad(input, result.GetRequiredValue(inputPalettePath), output, logger);
+                                TextureExtracting.ExtractEmbeddedTexturesToWad(input, inputPalette, output, logger);
                             }
                             else
                             {
                                 var outputFolder = output ?? Path.Combine(Path.GetDirectoryName(input) ?? "", $"{Path.GetFileNameWithoutExtension(input)}_extracted");
-                                string? palette = null;
-                                if (inputIsBsp)
-                                {
-                                    palette = result.GetRequiredValue(inputPalettePath);
-                                }
-                                else
-                                {
-                                    palette = result.GetValue(outputPalettePath) ?? Path.Combine(outputFolder, $"{Path.GetFileNameWithoutExtension(input)}.lmp");
-                                }
 
                                 var extractionSettings = new ExtractionSettings
                                 {
@@ -187,7 +173,7 @@ namespace QWadMaker
                                     OutputFormat = result.GetValue(outputImageFormat),
                                     SaveAsIndexed = result.GetValue(extractAsIndexed),
                                 };
-                                TextureExtracting.ExtractTextures(input, palette, outputFolder, extractionSettings, logger);
+                                TextureExtracting.ExtractTextures(input, inputPalette, outputFolder, extractionSettings, logger);
                             }
                         }
                     });

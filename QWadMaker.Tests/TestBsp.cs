@@ -16,7 +16,7 @@ public sealed class TestBsp
     static readonly Shared.Logger Logger = new(Console.WriteLine);
 
     [TestMethod]
-    public void ExtractTextures()
+    public void ExtractTexturesDefaultPalette()
     {
         var outputPath = GetOutputPath("bsp_extract");
         if (Directory.Exists(outputPath))
@@ -32,7 +32,7 @@ public sealed class TestBsp
             OutputFormat = Shared.FileFormats.ImageFormat.Png,
             SaveAsIndexed = true,
         };
-        TextureExtracting.ExtractTextures(GetDataPath("quake_minimal.bsp"), GetDataPath("palette.lmp"), outputPath, extractionSettings, Logger);
+        TextureExtracting.ExtractTextures(GetDataPath("quake_minimal.bsp"), null, outputPath, extractionSettings, Logger);
 
         // Check that both the reference folder and the output folder have the exact same set of files
         var targetTexturePaths = Directory.GetFiles(GetDataPath("bsp_textures"));

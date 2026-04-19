@@ -1,16 +1,18 @@
-﻿namespace Shared
+﻿using SixLabors.ImageSharp.PixelFormats;
+
+namespace Shared
 {
-    public class Wad
+    public class Wad(Rgba32[] palette, List<Texture> textures)
     {
         const string MAGIC = "WAD2";
 
-        public List<Texture> Textures { get; } = new List<Texture>();
-
+        public List<Texture> Textures { get; } = textures;
+        public Rgba32[] Palette { get; private set; } = palette;
 
         public void Save(string path)
         {
-            using (var file = File.Create(path))
-                Save(file);
+            using var file = File.Create(path);
+            Save(file);
         }
 
         public void Save(Stream stream)
@@ -48,15 +50,15 @@
         }
 
 
-        public static Wad Load(string path, Action<int, string, Exception>? errorCallback = null)
+        public static Wad Load(string wadPath, string? palettePath, Action<int, string, Exception>? errorCallback = null)
         {
-            using (var file = File.OpenRead(path))
-                return Load(file, errorCallback);
+            using var file = File.OpenRead(wadPath);
+            var palette = palettePath != null ? Shared.Palette.Read(palettePath) : Shared.Palette.DefaultQuakePalette;
+            return Load(file, palette, errorCallback);
         }
 
-        public static Wad Load(Stream stream, Action<int, string, Exception>? errorCallback = null)
+        public static Wad Load(Stream stream, Rgba32[] palette, Action<int, string, Exception>? errorCallback = null)
         {
-            var wad = new Wad();
 
             var fileSignature = stream.ReadString(4);
             if (fileSignature != MAGIC)
@@ -70,22 +72,24 @@
                 .Select(i => ReadLump(stream))
                 .ToArray();
 
+            List<Texture> textures = [];
             for (int i = 0; i < lumps.Length; i++)
             {
+                var lump = lumps[i];
                 try
                 {
-                    wad.Textures.Add(ReadTexture(stream, lumps[i]));
+                    textures.Add(ReadTexture(stream, lump));
                 }
                 catch (Exception ex)
                 {
                     if (errorCallback == null)
                         throw;
 
-                    errorCallback(i, lumps[i].Name, ex);
+                    errorCallback(i, lump.Name, ex);
                 }
             }
 
-            return wad;
+            return new Wad(palette, textures);
         }
 
 
@@ -118,14 +122,6 @@
                 stream.Write(texture.Mipmap1Data);
                 stream.Write(texture.Mipmap2Data);
                 stream.Write(texture.Mipmap3Data);
-
-                stream.Write((ushort)texture.Palette.Length);
-                if (texture.Type == LumpType.MipmapTexture)
-                {
-                    foreach (var color in texture.Palette)
-                        stream.Write(color);
-                }
-                stream.Write(new byte[StreamExtensions.RequiredPadding(2 + texture.Palette.Length * 3, 4)]);
             }
             else if (texture.Type == LumpType.Font)
             {
@@ -140,22 +136,16 @@
                     stream.Write((ushort)charInfo.CharWidth);
                 }
                 stream.Write(texture.ImageData);
-
-                stream.Write((ushort)texture.Palette.Length);
-                foreach (var color in texture.Palette)
-                    stream.Write(color);
-                stream.Write(new byte[StreamExtensions.RequiredPadding(2 + texture.Palette.Length * 3, 4)]);
             }
             else if (texture.Type == LumpType.SimpleTexture)
             {
                 stream.Write((uint)texture.Width);
                 stream.Write((uint)texture.Height);
                 stream.Write(texture.ImageData);
-
-                stream.Write((ushort)texture.Palette.Length);
-                foreach (var color in texture.Palette)
-                    stream.Write(color);
-                stream.Write(new byte[StreamExtensions.RequiredPadding(2 + texture.Palette.Length * 3, 4)]);
+            }
+            else if (texture.Type == LumpType.FlatTexture)
+            {
+                stream.Write(texture.ImageData);
             }
             else
             {
@@ -205,12 +195,7 @@
                 stream.Seek(lump.Offset + mipmap3Offset, SeekOrigin.Begin);
                 var mipmap3Data = stream.ReadBytes(width / 8 * height / 8);
 
-                var paletteSize = stream.ReadUshort();
-                var palette = Enumerable.Range(0, Math.Min(Constants.MaxPaletteSize, (int)paletteSize))
-                    .Select(i => stream.ReadColor())
-                    .ToArray();
-
-                return Texture.CreateMipmapTexture(name, width, height, imageData, palette, mipmap1Data, mipmap2Data, mipmap3Data);
+                return Texture.CreateMipmapTexture(name, width, height, imageData, mipmap1Data, mipmap2Data, mipmap3Data);
             }
             else if (lump.Type == LumpType.Font)
             {
@@ -226,12 +211,7 @@
                     .ToArray();
                 var imageData = stream.ReadBytes(width * height);
 
-                var paletteSize = stream.ReadUshort();
-                var palette = Enumerable.Range(0, Math.Min(Constants.MaxPaletteSize, (int)paletteSize))
-                    .Select(i => stream.ReadColor())
-                    .ToArray();
-
-                return Texture.CreateFont(lump.Name, width, height, rowCount, charHeight, charInfos, imageData, palette);
+                return Texture.CreateFont(lump.Name, width, height, rowCount, charHeight, charInfos, imageData);
             }
             else if (lump.Type == LumpType.SimpleTexture)
             {
@@ -239,12 +219,12 @@
                 var height = (int)stream.ReadUint();
                 var imageData = stream.ReadBytes(width * height);
 
-                var paletteSize = stream.ReadUshort();
-                var palette = Enumerable.Range(0, Math.Min(Constants.MaxPaletteSize, (int)paletteSize))
-                    .Select(i => stream.ReadColor())
-                    .ToArray();
-
-                return Texture.CreateSimpleTexture(lump.Name, width, height, imageData, palette);
+                return Texture.CreateSimpleTexture(lump.Name, width, height, imageData);
+            }
+            else if (lump.Type == LumpType.FlatTexture)
+            {
+                // TODO:
+                throw new NotImplementedException();
             }
             else
             {
@@ -261,9 +241,6 @@
                 size += texture.Mipmap1Data!.Length;
                 size += texture.Mipmap2Data!.Length;
                 size += texture.Mipmap3Data!.Length;
-                size += 2;
-                size += texture.Palette.Length * 3;
-                size += StreamExtensions.RequiredPadding(2 + texture.Palette.Length * 3, 4);
                 return (uint)size;
             }
             else if (texture.Type == LumpType.Font)
@@ -271,19 +248,18 @@
                 var size = 16;
                 size += texture.CharInfos!.Length * 4;
                 size += texture.ImageData.Length;
-                size += 2;
-                size += texture.Palette.Length * 3;
-                size += StreamExtensions.RequiredPadding(2 + texture.Palette.Length * 3, 4);
                 return (uint)size;
             }
             else if (texture.Type == LumpType.SimpleTexture)
             {
                 var size = 8;
                 size += texture.ImageData.Length;
-                size += 2;
-                size += texture.Palette.Length * 3;
-                size += StreamExtensions.RequiredPadding(2 + texture.Palette.Length * 3, 4);
                 return (uint)size;
+            }
+            else if (texture.Type == LumpType.FlatTexture)
+            {
+                // TODO:
+                throw new NotImplementedException();
             }
             else
             {

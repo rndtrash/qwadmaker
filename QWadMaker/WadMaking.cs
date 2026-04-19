@@ -32,11 +32,12 @@ namespace QWadMaker
             var wadMakingHistory = WadMakingHistory.Load(inputDirectory);
             var doIncrementalUpdate = !doFullRebuild && File.Exists(outputWadFilePath) && wadMakingHistory != null && wadMakingHistory.OutputFile.HasMatchingFileHash(outputWadFilePath);
 
-            var wad = doIncrementalUpdate ? LoadWad(outputWadFilePath, logger) : new Wad();
+            // TODO: Quake palette
+            var wad = doIncrementalUpdate ? LoadWad(outputWadFilePath, logger) : new Wad([], []);
             var wadMakingSettings = WadMakingSettings.Load(inputDirectory);
 
             var conversionOutputDirectory = ExternalConversion.GetConversionOutputDirectory(inputDirectory);
-            var isDecalsWad = Path.GetFileNameWithoutExtension(outputWadFilePath).ToLowerInvariant() == "decals";
+            var isDecalsWad = Path.GetFileNameWithoutExtension(outputWadFilePath).Equals("decals", StringComparison.InvariantCultureIgnoreCase);
             var existingTextureNames = wad.Textures.Select(texture => texture.Name.ToLowerInvariant()).ToHashSet();
 
 
@@ -138,7 +139,7 @@ namespace QWadMaker
                     var newTextureNames = textureSourceFileGroups.Select(group => group.Key).ToHashSet();
                     foreach (var textureName in existingTextureNames.Except(newTextureNames))
                     {
-                        wad.Textures.Remove(wad.Textures.First(texture => texture.Name.ToLowerInvariant() == textureName));
+                        wad.Textures.Remove(wad.Textures.First(texture => texture.Name.Equals(textureName, StringComparison.InvariantCultureIgnoreCase)));
                         removedTexturesCount += 1;
                         logger.Log($"- Removed texture '{textureName}'.");
                     }
@@ -523,7 +524,6 @@ namespace QWadMaker
                 width: indexedMainImage.Width,
                 height: indexedMainImage.Height,
                 imageData: indexedMainImage.ImageData,
-                palette: palette,
                 mipmap1Data: mipmapTextureData[0],
                 mipmap2Data: mipmapTextureData[1],
                 mipmap3Data: mipmapTextureData[2]);
@@ -553,7 +553,6 @@ namespace QWadMaker
                 width: mainImage.Width,
                 height: mainImage.Height,
                 imageData: mainTextureData,
-                palette: palette,
                 mipmap1Data: mipmapTextureData[0],
                 mipmap2Data: mipmapTextureData[1],
                 mipmap3Data: mipmapTextureData[2]);
@@ -620,7 +619,6 @@ namespace QWadMaker
                 width: mainImage.Width,
                 height: mainImage.Height,
                 imageData: mainTextureData,
-                palette: palette,
                 mipmap1Data: mipmapTextureData[0],
                 mipmap2Data: mipmapTextureData[1],
                 mipmap3Data: mipmapTextureData[2]);
@@ -675,7 +673,6 @@ namespace QWadMaker
                 width: mainImage.Width,
                 height: mainImage.Height,
                 imageData: mainTextureData,
-                palette: palette,
                 mipmap1Data: mipmapTextureData[0],
                 mipmap2Data: mipmapTextureData[1],
                 mipmap3Data: mipmapTextureData[2]);
@@ -722,7 +719,6 @@ namespace QWadMaker
                 width: mainImage.Width,
                 height: mainImage.Height,
                 imageData: mainTextureData,
-                palette: palette,
                 mipmap1Data: mipmapTextureData[0],
                 mipmap2Data: mipmapTextureData[1],
                 mipmap3Data: mipmapTextureData[2]);
@@ -830,7 +826,6 @@ namespace QWadMaker
                 width: mainImage.Width,
                 height: mainImage.Height,
                 imageData: mainTextureData,
-                palette: palette,
                 mipmap1Data: mipmapTextureData[0],
                 mipmap2Data: mipmapTextureData[1],
                 mipmap3Data: mipmapTextureData[2]);
@@ -848,8 +843,7 @@ namespace QWadMaker
                 textureName,
                 indexedImage.Width,
                 indexedImage.Height,
-                indexedImage.ImageData,
-                indexedImage.Palette);
+                indexedImage.ImageData);
         }
 
         private static Texture CreateFontTextureFromSourceFiles(string textureName, TextureSourceFileInfo[] sourceFiles, Logger logger)
@@ -871,8 +865,7 @@ namespace QWadMaker
                 fontData.RowCount,
                 fontData.CharacterHeight,
                 fontData.CharInfos,
-                indexedImage.ImageData,
-                indexedImage.Palette);
+                indexedImage.ImageData);
         }
 
         /// <summary>
@@ -899,26 +892,22 @@ namespace QWadMaker
                 var isTransparentPredicate = Util.MakeTransparencyPredicate(transparencyThreshold, textureSettings.TransparencyColor);
 
                 var maxColors = Constants.MaxPaletteSize - 1;
-                var colorHistogram = ColorQuantization.GetColorHistogram(new[] { image }, isTransparentPredicate);
+                var colorHistogram = ColorQuantization.GetColorHistogram([image], isTransparentPredicate);
                 var colorClusters = ColorQuantization.GetColorClusters(colorHistogram, maxColors);
 
                 // Always make sure we've got a 256-color palette (some tools can't handle smaller palettes):
                 if (colorClusters.Length < maxColors)
                 {
-                    colorClusters = colorClusters
-                        .Concat(Enumerable.Range(0, maxColors - colorClusters.Length).Select(i => (new Rgba32(), new[] { new Rgba32() })))
-                        .ToArray();
+                    colorClusters = [.. colorClusters, .. Enumerable.Range(0, maxColors - colorClusters.Length).Select(i => (new Rgba32(), new[] { new Rgba32() }))];
                 }
 
                 // The last palette slot is reserved for transparent areas:
                 var colorKey = new Rgba32(0, 0, 255);
-                colorClusters = colorClusters
-                    .Append((colorKey, new[] { colorKey }))         // Slot 255: used for transparent pixels
-                    .ToArray();
+                colorClusters = [.. colorClusters, (colorKey, new[] { colorKey })];
 
                 // Create the actual palette, and a color index lookup cache:
                 var palette = colorClusters
-                    .Select(cluster => cluster.Item1)
+                    .Select(cluster => cluster.averageColor)
                     .ToArray();
                 var colorIndexMappingCache = new Dictionary<Rgba32, int>();
                 for (int i = 0; i < colorClusters.Length; i++)
@@ -976,15 +965,11 @@ namespace QWadMaker
         {
             var getColorIndex = ColorQuantization.CreateColorIndexLookup(palette, colorIndexMappingCache, isTransparent);
             var ditheringAlgorithm = textureSettings.DitheringAlgorithm ?? (disableDithering ? DitheringAlgorithm.None : DitheringAlgorithm.FloydSteinberg);
-            switch (ditheringAlgorithm)
+            return ditheringAlgorithm switch
             {
-                default:
-                case DitheringAlgorithm.None:
-                    return Dithering.None(image, getColorIndex);
-
-                case DitheringAlgorithm.FloydSteinberg:
-                    return Dithering.FloydSteinberg(image, palette, getColorIndex, textureSettings.DitherScale ?? 0.75f, isTransparent);
-            }
+                DitheringAlgorithm.FloydSteinberg => Dithering.FloydSteinberg(image, palette, getColorIndex, textureSettings.DitherScale ?? 0.75f, isTransparent),
+                _ => Dithering.None(image, getColorIndex),
+            };
         }
 
         private static byte[] CreateFullbrightTextureData(
@@ -1021,19 +1006,11 @@ namespace QWadMaker
                 // If a fullbright mask is provided, create texture data for fullbright pixels:
                 var fullbrightPalette = palette.Skip(maxNormalColors).ToArray();
                 var getFullbrightColorIndex = ColorQuantization.CreateColorIndexLookup(fullbrightPalette, fullbrightColorIndexMappingCache, color => color.A < fullbrightAlphaThreshold);
-
-                byte[] fullbrightTextureData;
-                switch (ditheringAlgorithm)
+                byte[] fullbrightTextureData = ditheringAlgorithm switch
                 {
-                    default:
-                    case DitheringAlgorithm.None:
-                        fullbrightTextureData = Dithering.None(fullbrightImage, getFullbrightColorIndex);
-                        break;
-
-                    case DitheringAlgorithm.FloydSteinberg:
-                        fullbrightTextureData = Dithering.FloydSteinberg(fullbrightImage, fullbrightPalette, getFullbrightColorIndex, textureSettings.DitherScale ?? 0.75f, color => color.A < fullbrightAlphaThreshold);
-                        break;
-                }
+                    DitheringAlgorithm.FloydSteinberg => Dithering.FloydSteinberg(fullbrightImage, fullbrightPalette, getFullbrightColorIndex, textureSettings.DitherScale ?? 0.75f, color => color.A < fullbrightAlphaThreshold),
+                    _ => Dithering.None(fullbrightImage, getFullbrightColorIndex),
+                };
 
                 // Merge the fullbright pixel data into the normal texture data:
                 for (int y = 0; y < image.Height; y++)
@@ -1055,7 +1032,8 @@ namespace QWadMaker
         private static Wad LoadWad(string filePath, Logger logger)
         {
             logger.Log($"Loading wad file: '{filePath}'.");
-            return Wad.Load(filePath, (index, name, exception) => logger.Log($"- Failed to load texture #{index} ('{name}'): {exception.GetType().Name}: '{exception.Message}'."));
+            // TODO: Quake palette
+            return Wad.Load(filePath, null, (index, name, exception) => logger.Log($"- Failed to load texture #{index} ('{name}'): {exception.GetType().Name}: '{exception.Message}'."));
         }
     }
 }
