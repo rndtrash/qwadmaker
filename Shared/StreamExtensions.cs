@@ -94,7 +94,7 @@ namespace Shared
         public static void Write(this Stream stream, byte[] bytes) => stream.Write(bytes, 0, bytes.Length);
 
 
-        public static void Write(this Stream stream, Rgba32 value) => stream.Write(new byte[] { value.R, value.G, value.B });
+        public static void Write(this Stream stream, Rgba32 value) => stream.Write([value.R, value.G, value.B]);
 
         #endregion
 

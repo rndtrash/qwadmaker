@@ -52,7 +52,7 @@ namespace QWadMaker
 
             Util.CreateDirectory(outputDirectory);
 
-            var isDecalsWad = Path.GetFileName(inputFilePath).ToLowerInvariant() == "decals.wad";
+            var isDecalsWad = Path.GetFileName(inputFilePath).Equals("decals.wad", StringComparison.InvariantCultureIgnoreCase);
             foreach (var texture in textures)
             {
                 var isFullbrightTexture = !isDecalsWad && TextureName.IsFullbright(texture.Name);

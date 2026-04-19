@@ -93,12 +93,12 @@ namespace Shared
                     var bspTexture = ReadTexture(texturesLumpstream);
                     if (wadTextures.TryGetValue(bspTexture.Name.ToLowerInvariant(), out var wadTexture))
                     {
-                        bspTexture.ImageData = new[] {
+                        bspTexture.ImageData = [
                             wadTexture.ImageData,
                             wadTexture.Mipmap1Data,
                             wadTexture.Mipmap2Data,
                             wadTexture.Mipmap3Data,
-                        };
+                        ];
                         bspTexture.Palette = wadTexture.Palette;
                         embeddedTextureCount += 1;
                     }
@@ -378,7 +378,7 @@ namespace Shared
 
             [MemberNotNullWhen(true, nameof(ImageData))]
             [MemberNotNullWhen(true, nameof(Palette))]
-            public bool IsEmbedded => ImageData != null && ImageData.All(data => data != null) && Palette != null;
+            public readonly bool IsEmbedded => ImageData != null && ImageData.All(data => data != null) && Palette != null;
         }
     }
 }
