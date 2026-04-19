@@ -16,6 +16,8 @@
     <Description>A command-line tool that can turn directories that contain images into Quake 1 WAD files.</Description>
     <Copyright>Copyright © Pieter Witvoet 2021, Ivan Kuzmenko 2026</Copyright>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+    <PublishTrimmed>true</PublishTrimmed>
+    <PublishAot>True</PublishAot>
   </PropertyGroup>
 
   <ItemGroup>
