@@ -1,9 +1,8 @@
-﻿using SixLabors.ImageSharp;
-using System.Reflection;
-using System.Text;
+﻿using System.Text;
 using Shared;
 using System.Diagnostics.CodeAnalysis;
 using Shared.FileFormats;
+using System.CommandLine;
 
 namespace QWadMaker
 {
@@ -52,51 +51,268 @@ namespace QWadMaker
 
     class Program
     {
-        static TextWriter? LogFile;
-
-
-        static void Main(string[] args)
+        static int Main(string[] args)
         {
+            TextWriter? LogFile = null;
+            void Log(string? message)
+            {
+                Console.WriteLine(message);
+                LogFile?.WriteLine(message);
+            }
+
             try
             {
-                var assemblyName = Assembly.GetExecutingAssembly().GetName();
-                var launchInfo = $"{assemblyName.Name}.exe (v{assemblyName.Version}) {string.Join(" ", args)}";
+                var assemblyName = typeof(Program).Assembly.GetName();
+                var launchInfo = $"{Environment.ProcessPath} (v{assemblyName.Version}) {string.Join(" ", args)}";
                 Log(launchInfo);
 
-                var settings = ParseArguments(args);
-                if (!settings.DisableFileLogging)
+                var logger = new Logger(Log);
+
+                RootCommand rootCommand = new("QWadMaker - a command line tool to create, modify and extract the Quake WADs");
+
+                #region Common parameters
+                Option<bool> disableFileLogging = new("--nologfile")
                 {
-                    var logName = Path.GetFileNameWithoutExtension(settings.InputDirectory ?? settings.InputFilePath);
-                    var logFilePath = Path.Combine(Path.GetDirectoryName(settings.InputDirectory ?? settings.InputFilePath) ?? "", $"wadmaker - {logName}.log");
-                    LogFile = new StreamWriter(logFilePath, false, Encoding.UTF8);
-                    LogFile.WriteLine(launchInfo);
+                    Description = "Disables logging to a file (parent-directory\\wadmaker.log)",
+                    Recursive = true
+                };
+                rootCommand.Add(disableFileLogging);
+
+                void SetupLogging(ParseResult parseResult, string inputFile)
+                {
+                    if (!parseResult.GetValue(disableFileLogging))
+                    {
+                        var logName = Path.GetFileNameWithoutExtension(inputFile);
+                        var logFilePath = Path.Combine(Path.GetDirectoryName(inputFile) ?? "", $"wadmaker - {logName}.log");
+                        LogFile = new StreamWriter(logFilePath, false, Encoding.UTF8);
+                        LogFile.WriteLine(launchInfo);
+                    }
+                }
+                #endregion
+
+                #region Extract subcommand
+                {
+                    Command extract = new("extract", "Extract a .wad or .bsp into a folder");
+
+                    Argument<string> inputFilePath = new("input")
+                    {
+                        Description = "The .wad or .bsp that you want to extract the textures from",
+                        Arity = ArgumentArity.ExactlyOne
+                    };
+                    extract.Add(inputFilePath);
+
+                    Argument<string> outputFilePath = new("output")
+                    {
+                        Description = "A folder for the exported textures, or the name for a new .wad file with textures from .bsp",
+                        Arity = ArgumentArity.ZeroOrOne
+                    };
+                    extract.Add(outputFilePath);
+
+                    Option<string> inputPalettePath = new("--input-palette")
+                    {
+                        Description = "Path to the input .lmp palette (required when extracting textures from a .bsp file)"
+                    };
+                    extract.Add(inputPalettePath);
+
+                    Option<string> outputPalettePath = new("--output-palette")
+                    {
+                        Description = "Path to the output .lmp palette (used when extracting a .wad file)"
+                    };
+                    extract.Add(outputPalettePath);
+
+                    Option<bool> extractMipmaps = new("--mipmaps")
+                    {
+                        Description = "Extract mipmap levels as images"
+                    };
+                    extract.Add(extractMipmaps);
+
+                    Option<bool> noFullbrightMasks = new("--nofullbright")
+                    {
+                        Description = "Do not extract fullbright masks"
+                    };
+                    extract.Add(noFullbrightMasks);
+
+                    Option<bool> overwriteExistingFiles = new("--overwrite")
+                    {
+                        Description = "Extract mode only, enables overwriting of existing image files (off by default)"
+                    };
+                    extract.Add(overwriteExistingFiles);
+
+                    Option<ImageFormat> outputImageFormat = new("--format")
+                    {
+                        Description = "Extracted images output format"
+                    };
+                    extract.Add(outputImageFormat);
+
+                    Option<bool> extractAsIndexed = new("--indexed")
+                    {
+                        Description = "Extracted images are indexed and contain the original texture's palette. Only works with png, gif and bmp."
+                    };
+                    extract.Add(extractAsIndexed);
+
+                    extract.SetAction(result =>
+                    {
+                        var input = result.GetRequiredValue(inputFilePath);
+                        var output = result.GetValue(outputFilePath);
+
+                        SetupLogging(result, input);
+
+                        var inputExtension = Path.GetExtension(input);
+                        if (inputExtension != null)
+                        {
+                            var inputIsBsp = inputExtension.Equals(".bsp", StringComparison.InvariantCultureIgnoreCase);
+                            // If the output file is set to a .wad file, then we call a special extraction method
+                            if (inputIsBsp && output != null && Path.GetExtension(output).Equals(".wad", StringComparison.InvariantCultureIgnoreCase))
+                            {
+                                TextureExtracting.ExtractEmbeddedTexturesToWad(input, result.GetRequiredValue(inputPalettePath), output, logger);
+                            }
+                            else
+                            {
+                                var outputFolder = output ?? Path.Combine(Path.GetDirectoryName(input) ?? "", $"{Path.GetFileNameWithoutExtension(input)}_extracted");
+                                string? palette = null;
+                                if (inputIsBsp)
+                                {
+                                    palette = result.GetRequiredValue(inputPalettePath);
+                                }
+                                else
+                                {
+                                    palette = result.GetValue(outputPalettePath) ?? Path.Combine(outputFolder, $"{Path.GetFileNameWithoutExtension(input)}.lmp");
+                                }
+
+                                var extractionSettings = new ExtractionSettings
+                                {
+                                    ExtractMipmaps = result.GetValue(extractMipmaps),
+                                    NoFullbrightMasks = result.GetValue(noFullbrightMasks),
+                                    OverwriteExistingFiles = result.GetValue(overwriteExistingFiles),
+                                    OutputFormat = result.GetValue(outputImageFormat),
+                                    SaveAsIndexed = result.GetValue(extractAsIndexed),
+                                };
+                                TextureExtracting.ExtractTextures(input, palette, outputFolder, extractionSettings, logger);
+                            }
+                        }
+                    });
+
+                    rootCommand.Subcommands.Add(extract);
+                }
+                #endregion
+
+                #region Embed subcommand
+                {
+                    Command embed = new("embed", "Embed textures into a .bsp");
+
+                    Argument<string> inputWadPath = new("input-wad")
+                    {
+                        Description = "The .wad with textures to be embedded",
+                        Arity = ArgumentArity.ExactlyOne
+                    };
+                    embed.Add(inputWadPath);
+
+                    Argument<string> inputBspPath = new("input-bsp")
+                    {
+                        Description = "The .bsp to embed the textures to",
+                        Arity = ArgumentArity.ExactlyOne
+                    };
+                    embed.Add(inputBspPath);
+
+                    Argument<string> outputBspPath = new("output")
+                    {
+                        Description = "The name of a new .bsp with embedded textures",
+                        Arity = ArgumentArity.ZeroOrOne
+                    };
+                    embed.Add(outputBspPath);
+
+                    embed.SetAction(result =>
+                    {
+                        var inputBsp = result.GetRequiredValue(inputBspPath);
+                        SetupLogging(result, inputBsp);
+                        TextureEmbedding.EmbedTextures(result.GetRequiredValue(inputWadPath), inputBsp, result.GetValue(outputBspPath) ?? inputBsp, logger);
+                    });
+
+                    rootCommand.Subcommands.Add(embed);
+                }
+                #endregion
+
+                #region Strip subcommand
+                {
+                    Command strip = new("strip", "Removes all the textures embedded into .bsp");
+
+                    Argument<string> inputBspPath = new("input")
+                    {
+                        Description = "The source .bsp",
+                        Arity = ArgumentArity.ExactlyOne
+                    };
+                    strip.Add(inputBspPath);
+
+                    Argument<string> outputBspPath = new("output")
+                    {
+                        Description = "Name of a new .bsp file with textures removed, the source file will be kept intact",
+                        Arity = ArgumentArity.ZeroOrOne
+                    };
+                    strip.Add(outputBspPath);
+
+                    strip.SetAction(result =>
+                    {
+                        var inputBsp = result.GetRequiredValue(inputBspPath);
+                        SetupLogging(result, inputBsp);
+                        TextureEmbedding.RemoveEmbeddedTextures(inputBsp, result.GetValue(outputBspPath) ?? inputBsp, logger);
+                    });
+
+                    rootCommand.Subcommands.Add(strip);
+                }
+                #endregion
+
+                Option<bool> fullRebuild = new("--full")
+                {
+                    Description = "Forces a full rebuild instead of an incremental one"
+                };
+                rootCommand.Add(fullRebuild);
+
+                Option<bool> includeSubdirs = new("--subdirs")
+                {
+                    Description = "Recursively include images in sub-directories"
+                };
+                rootCommand.Add(includeSubdirs);
+
+                var parseResult = rootCommand.Parse(args);
+                if (parseResult.Errors.Count > 0)
+                {
+                    foreach (var error in parseResult.Errors)
+                    {
+                        Console.Error.WriteLine(error);
+                    }
+                    return 1;
                 }
 
-                var logger = new Logger(Log);
-                if (settings.Extract)
+                return parseResult.Invoke();
+
+                var settings = new ProgramSettings()
                 {
-                    var extractionSettings = new ExtractionSettings {
-                        ExtractMipmaps = settings.ExtractMipmaps,
-                        NoFullbrightMasks = settings.NoFullbrightMasks,
-                        OverwriteExistingFiles = settings.OverwriteExistingFiles,
-                        OutputFormat = settings.OutputImageFormat,
-                        SaveAsIndexed = settings.ExtractAsIndexed,
-                    };
-                    TextureExtracting.ExtractTextures(settings.InputFilePath, settings.InputPalette, settings.OutputDirectory, extractionSettings, logger);
-                }
-                else if (settings.ExtractToWad)
+                    FullRebuild = parseResult.GetValue(fullRebuild),
+                    IncludeSubDirectories = parseResult.GetValue(includeSubdirs),
+                    //ExtractMipmaps = parseResult.GetValue(extractMipmaps),
+                    //NoFullbrightMasks = parseResult.GetValue(noFullbrightMasks),
+                    //OverwriteExistingFiles = parseResult.GetValue(overwriteExistingFiles),
+                    //OutputImageFormat = parseResult.GetValue(outputImageFormat),
+                    //ExtractAsIndexed = parseResult.GetValue(extractAsIndexed),
+                    //RemoveEmbeddedTextures = parseResult.GetValue(removeEmbeddedTextures),
+                    DisableFileLogging = parseResult.GetValue(disableFileLogging)
+                };
+
+                /*
                 {
-                    TextureExtracting.ExtractEmbeddedTexturesToWad(settings.InputFilePath, settings.InputPalette, settings.OutputFilePath, logger);
+                    // Wad making requires a directory path, and optionally an output wad file path:
+                    settings.InputDirectory = args[index++];
+
+                    if (index < args.Length)
+                        settings.OutputFilePath = args[index++];
+                    else
+                        settings.OutputFilePath = $"{Path.GetFileName(settings.InputDirectory)}.wad";
+
+                    if (!Path.IsPathRooted(settings.OutputFilePath))
+                        settings.OutputFilePath = Path.Combine(Path.GetDirectoryName(settings.InputDirectory) ?? "", settings.OutputFilePath);
                 }
-                else if (settings.EmbedTextures)
-                {
-                    TextureEmbedding.EmbedTextures(settings.InputFilePath, settings.ExtraInputFilePath, settings.OutputFilePath, logger);
-                }
-                else if (settings.RemoveEmbeddedTextures)
-                {
-                    TextureEmbedding.RemoveEmbeddedTextures(settings.InputFilePath, settings.OutputFilePath, logger);
-                }
-                else
+                */
+                // TODO: Making WADs
                 {
                     WadMaking.MakeWad(settings.InputDirectory!, settings.OutputFilePath!, settings.FullRebuild, settings.IncludeSubDirectories, logger);
                 }
@@ -114,140 +330,9 @@ namespace QWadMaker
             {
                 LogFile?.Dispose();
             }
-        }
 
-
-        private static ProgramSettings ParseArguments(string[] args)
-        {
-            var settings = new ProgramSettings();
-
-            // First parse options:
-            var index = 0;
-            while (index < args.Length && args[index].StartsWith("-"))
-            {
-                var arg = args[index++];
-                switch (arg)
-                {
-                    case "-full": settings.FullRebuild = true; break;
-                    case "-subdirs": settings.IncludeSubDirectories = true; break;
-                    case "-mipmaps": settings.ExtractMipmaps = true; break;
-                    case "-nofullbright": settings.NoFullbrightMasks = true; break;
-                    case "-overwrite": settings.OverwriteExistingFiles = true; break;
-
-                    case "-format":
-                        if (index >= args.Length)
-                            throw new InvalidUsageException("The -format parameter must be set to either png, jpg, gif, bmp or tga.");
-
-                        settings.OutputImageFormat = ParseOutputImageFormat(args[index++]);
-                        break;
-
-                    case "-indexed": settings.ExtractAsIndexed = true; break;
-                    case "-remove": settings.RemoveEmbeddedTextures = true; break;
-                    case "-nologfile": settings.DisableFileLogging = true; break;
-
-                    default: throw new InvalidUsageException($"Unknown argument: '{arg}'.");
-                }
-            }
-
-            // Then handle arguments (paths):
-            var paths = args.Skip(index).ToArray();
-            if (paths.Length == 0)
-                throw new InvalidUsageException("Missing input folder (for wad building) or file (for texture extraction) argument.");
-
-            if (File.Exists(paths[0]))
-            {
-                var extension = Path.GetExtension(paths[0]).ToLowerInvariant();
-                if (extension == ".bsp" && !settings.RemoveEmbeddedTextures)
-                {
-                    if (paths.Length > 1 && Path.GetExtension(paths[1]).ToLowerInvariant() == ".wad")
-                        settings.ExtractToWad = true;
-                    else
-                        settings.Extract = true;
-                }
-                else if (extension == ".wad")
-                {
-                    if (paths.Length > 1 && File.Exists(paths[1]) && Path.GetExtension(paths[1]).ToLowerInvariant() == ".bsp")
-                        settings.EmbedTextures = true;
-                    else
-                        settings.Extract = true;
-                }
-            }
-
-
-            if (settings.Extract)
-            {
-                // Texture extraction requires a wad or bsp file path, and optionally an output folder:
-                settings.InputFilePath = args[index++];
-
-                if (index < args.Length)
-                    settings.OutputDirectory = args[index++];
-                else
-                    settings.OutputDirectory = Path.Combine(Path.GetDirectoryName(settings.InputFilePath)!, Path.GetFileNameWithoutExtension(settings.InputFilePath) + "_extracted");
-            }
-            else if (settings.ExtractToWad)
-            {
-                // Embedded texture extraction to wad file requires a bsp file path and an output wad file path:
-                settings.InputFilePath = args[index++];
-                settings.InputPalette = args[index++];
-                settings.OutputFilePath = args[index++];
-            }
-            else if (settings.EmbedTextures)
-            {
-                // Embedding textures requires a wad and a bsp file path, and optionally an output bsp file path:
-                settings.InputFilePath = args[index++];
-                settings.ExtraInputFilePath = args[index++];
-
-                if (index < args.Length)
-                    settings.OutputFilePath = args[index++];
-                else
-                    settings.OutputFilePath = settings.ExtraInputFilePath;
-            }
-            else if (settings.RemoveEmbeddedTextures)
-            {
-                // Embedded texture removal requires a bsp file path, and optionally an output bsp file path:
-                settings.InputFilePath = args[index++];
-
-                if (index < args.Length)
-                    settings.OutputFilePath = args[index++];
-                else
-                    settings.OutputFilePath = settings.InputFilePath;
-            }
-            else
-            {
-                // Wad making requires a directory path, and optionally an output wad file path:
-                settings.InputDirectory = args[index++];
-
-                if (index < args.Length)
-                    settings.OutputFilePath = args[index++];
-                else
-                    settings.OutputFilePath = $"{Path.GetFileName(settings.InputDirectory)}.wad";
-
-                if (!Path.IsPathRooted(settings.OutputFilePath))
-                    settings.OutputFilePath = Path.Combine(Path.GetDirectoryName(settings.InputDirectory) ?? "", settings.OutputFilePath);
-            }
-
-            return settings;
-        }
-
-        private static ImageFormat ParseOutputImageFormat(string str)
-        {
-            switch (str.ToLowerInvariant())
-            {
-                case "png": return ImageFormat.Png;
-                case "jpg": return ImageFormat.Jpg;
-                case "gif": return ImageFormat.Gif;
-                case "bmp": return ImageFormat.Bmp;
-                case "tga": return ImageFormat.Tga;
-
-                default: throw new InvalidDataException($"Unknown image format: {str}.");
-            }
-        }
-
-
-        private static void Log(string? message)
-        {
-            Console.WriteLine(message);
-            LogFile?.WriteLine(message);
+            // We would get here only after receiving an exception, so let's return a non-zero exit code
+            return 1;
         }
     }
 }
