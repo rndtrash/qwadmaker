@@ -12,12 +12,7 @@ namespace Shared
         /// </summary>
         public static List<Texture> GetEmbeddedTextures(string path, string palettePath)
         {
-            Rgba32[] palette;
-            using (var paletteFile = File.OpenRead(palettePath))
-            {
-                palette = [.. Enumerable.Range(0, 256).Select(i => paletteFile.ReadColor())];
-            }
-
+            var palette = Lmp.Read(palettePath);
             using var file = File.OpenRead(path);
             return GetEmbeddedTextures(file, palette);
         }
