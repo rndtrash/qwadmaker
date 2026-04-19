@@ -7,7 +7,7 @@ namespace Shared
         Palette = 0x40,
         // TODO: Quake-specific lump types
         SimpleTexture = 0x42,
-        MipmapTexture = 0x43,
+        MipmapTexture = 0x44,
         Font = 0x46,
     }
 
