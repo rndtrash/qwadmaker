@@ -57,7 +57,7 @@ namespace QWadMaker
             {
                 var isFullbrightTexture = !isDecalsWad && TextureName.IsFullbright(texture.Name);
 
-                var maxMipmap = (texture.Type == TextureType.MipmapTexture && settings.ExtractMipmaps) ? 4 : 1;
+                var maxMipmap = (texture.Type == LumpType.MipmapTexture && settings.ExtractMipmaps) ? 4 : 1;
                 for (int mipmap = 0; mipmap < maxMipmap; mipmap++)
                 {
                     try
@@ -67,7 +67,7 @@ namespace QWadMaker
                         var fileSettings = GetOutputFileTextureSettings(texture, mipmap);
                         var filePath = WadMakingSettings.InsertTextureSettingsIntoFilename(baseFilePath, fileSettings);
 
-                        if (texture.Type == TextureType.Font)
+                        if (texture.Type == LumpType.Font)
                             SaveFontData(texture, baseFilePath, settings.OverwriteExistingFiles, logger);
 
                         if (!settings.OverwriteExistingFiles && File.Exists(filePath))
@@ -202,7 +202,7 @@ namespace QWadMaker
 
             var width = texture.Width >> mipmap;
             var height = texture.Height >> mipmap;
-            var hasColorKey = TextureName.IsTransparent(texture.Name) || texture.Type == TextureType.SimpleTexture;
+            var hasColorKey = TextureName.IsTransparent(texture.Name) || texture.Type == LumpType.SimpleTexture;
 
             var image = new Image<Rgba32>(width, height);
             image.ProcessPixelRows(accessor =>

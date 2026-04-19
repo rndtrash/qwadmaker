@@ -31,9 +31,9 @@ namespace QWadMaker.Settings
 
         /// <summary>
         /// The type of this texture. Three types are available: simple images (qpic), textures with mipmap data, and fonts.
-        /// Defaults to <see cref="TextureType.MipmapTexture"/> (textures with mipmap data).
+        /// Defaults to <see cref="LumpType.MipmapTexture"/> (textures with mipmap data).
         /// </summary>
-        public TextureType? TextureType { get; set; }
+        public LumpType? TextureType { get; set; }
 
         /// <summary>
         /// The mipmap level, for mipmap textures. Defaults to <see cref="MipmapLevel.Main"/>.

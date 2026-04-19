@@ -5,42 +5,41 @@ namespace QWadMaker.Settings
 {
     static class Serialization
     {
-        public static string ToString(TextureType textureType)
+        public static string ToString(LumpType textureType)
         {
-            switch (textureType)
+            return textureType switch
             {
-                default:
-                case TextureType.MipmapTexture: return "mipmap";
-                case TextureType.SimpleTexture: return "qpic";
-                case TextureType.Font: return "font";
-            }
+                LumpType.Palette => "palette",
+                LumpType.SimpleTexture => "qpic",
+                LumpType.Font => "font",
+                _ => "mipmap",
+            };
         }
 
-        public static TextureType? ReadTextureType(string? str)
+        public static LumpType? ReadTextureType(string? str)
         {
             if (str is null)
                 return null;
 
-            switch (str.ToLowerInvariant())
+            return str.ToLowerInvariant() switch
             {
-                default: throw new InvalidDataException($"Invalid texture type: '{str}'.");
-                case "mipmap": return TextureType.MipmapTexture;
-                case "qpic": return TextureType.SimpleTexture;
-                case "font": return TextureType.Font;
-            }
+                "mipmap" => (LumpType?)LumpType.MipmapTexture,
+                "qpic" => (LumpType?)LumpType.SimpleTexture,
+                "font" => (LumpType?)LumpType.Font,
+                _ => throw new InvalidDataException($"Invalid texture type: '{str}'."),
+            };
         }
 
 
         public static string ToString(MipmapLevel mipmapLevel)
         {
-            switch (mipmapLevel)
+            return mipmapLevel switch
             {
-                default:
-                case MipmapLevel.Main: return "";
-                case MipmapLevel.Mipmap1: return "mipmap1";
-                case MipmapLevel.Mipmap2: return "mipmap2";
-                case MipmapLevel.Mipmap3: return "mipmap3";
-            }
+                MipmapLevel.Mipmap1 => "mipmap1",
+                MipmapLevel.Mipmap2 => "mipmap2",
+                MipmapLevel.Mipmap3 => "mipmap3",
+                _ => "",
+            };
         }
 
         public static MipmapLevel? ReadMipmapLevel(string? str)
@@ -48,24 +47,23 @@ namespace QWadMaker.Settings
             if (str is null)
                 return null;
 
-            switch (str.ToLowerInvariant())
+            return str.ToLowerInvariant() switch
             {
-                default: return MipmapLevel.Main;
-                case "mipmap1": return MipmapLevel.Mipmap1;
-                case "mipmap2": return MipmapLevel.Mipmap2;
-                case "mipmap3": return MipmapLevel.Mipmap3;
-            }
+                "mipmap1" => (MipmapLevel?)MipmapLevel.Mipmap1,
+                "mipmap2" => (MipmapLevel?)MipmapLevel.Mipmap2,
+                "mipmap3" => (MipmapLevel?)MipmapLevel.Mipmap3,
+                _ => (MipmapLevel?)MipmapLevel.Main,
+            };
         }
 
 
         public static string ToString(DitheringAlgorithm ditheringAlgorithm)
         {
-            switch (ditheringAlgorithm)
+            return ditheringAlgorithm switch
             {
-                default:
-                case DitheringAlgorithm.None: return "none";
-                case DitheringAlgorithm.FloydSteinberg: return "floyd-steinberg";
-            }
+                DitheringAlgorithm.FloydSteinberg => "floyd-steinberg",
+                _ => "none",
+            };
         }
 
         public static DitheringAlgorithm? ReadDitheringAlgorithm(string? str)
@@ -73,23 +71,22 @@ namespace QWadMaker.Settings
             if (str is null)
                 return null;
 
-            switch (str.ToLowerInvariant())
+            return str.ToLowerInvariant() switch
             {
-                default: throw new InvalidDataException($"Invalid dithering algorithm: '{str}'.");
-                case "none": return DitheringAlgorithm.None;
-                case "floyd-steinberg": return DitheringAlgorithm.FloydSteinberg;
-            }
+                "none" => (DitheringAlgorithm?)DitheringAlgorithm.None,
+                "floyd-steinberg" => (DitheringAlgorithm?)DitheringAlgorithm.FloydSteinberg,
+                _ => throw new InvalidDataException($"Invalid dithering algorithm: '{str}'."),
+            };
         }
 
 
         public static string ToString(DecalTransparencySource decalTransparencySource)
         {
-            switch (decalTransparencySource)
+            return decalTransparencySource switch
             {
-                default:
-                case DecalTransparencySource.AlphaChannel: return "alpha";
-                case DecalTransparencySource.Grayscale: return "grayscale";
-            }
+                DecalTransparencySource.Grayscale => "grayscale",
+                _ => "alpha",
+            };
         }
 
         public static DecalTransparencySource? ReadDecalTransparencySource(string? str)
@@ -97,12 +94,12 @@ namespace QWadMaker.Settings
             if (str is null)
                 return null;
 
-            switch (str.ToLowerInvariant())
+            return str.ToLowerInvariant() switch
             {
-                default: throw new InvalidDataException($"Invalid decal transparency: '{str}'.");
-                case "alpha": return DecalTransparencySource.AlphaChannel;
-                case "grayscale": return DecalTransparencySource.Grayscale;
-            }
+                "alpha" => (DecalTransparencySource?)DecalTransparencySource.AlphaChannel,
+                "grayscale" => (DecalTransparencySource?)DecalTransparencySource.Grayscale,
+                _ => throw new InvalidDataException($"Invalid decal transparency: '{str}'."),
+            };
         }
 
 

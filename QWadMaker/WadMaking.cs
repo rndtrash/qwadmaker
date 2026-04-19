@@ -281,7 +281,7 @@ namespace QWadMaker
             }
 
             //Check presence of required font data files:
-            if (mainSourceFile.Settings.TextureType == TextureType.Font)
+            if (mainSourceFile.Settings.TextureType == LumpType.Font)
             {
                 var fontDataFilePath = FontData.GetFilePath(mainSourceFile.Path);
                 if (!File.Exists(fontDataFilePath))
@@ -366,9 +366,9 @@ namespace QWadMaker
             switch (mainFileSettings.TextureType)
             {
                 default:
-                case TextureType.MipmapTexture: return CreateMipmapTextureFromSourceFiles(textureName, convertedSourceFiles.ToArray(), isDecalsWad, logger);
-                case TextureType.SimpleTexture: return CreateSimpleTextureFromSourceFiles(textureName, convertedSourceFiles.ToArray(), logger);
-                case TextureType.Font: return CreateFontTextureFromSourceFiles(textureName, convertedSourceFiles.ToArray(), logger);
+                case LumpType.MipmapTexture: return CreateMipmapTextureFromSourceFiles(textureName, [.. convertedSourceFiles], isDecalsWad, logger);
+                case LumpType.SimpleTexture: return CreateSimpleTextureFromSourceFiles(textureName, [.. convertedSourceFiles], logger);
+                case LumpType.Font: return CreateFontTextureFromSourceFiles(textureName, [.. convertedSourceFiles], logger);
             }
         }
 

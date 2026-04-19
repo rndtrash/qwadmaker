@@ -185,7 +185,7 @@ namespace QWadMaker.Settings
             var extension = Path.GetExtension(filename);
             var sb = new StringBuilder();
 
-            if (settings.TextureType != null && settings.TextureType != TextureType.MipmapTexture)
+            if (settings.TextureType != null && settings.TextureType != LumpType.MipmapTexture)
                 sb.Append("." + Serialization.ToString(settings.TextureType.Value));
             if (settings.IsFullbrightMask == true)
                 sb.Append(".fullbright");
@@ -198,12 +198,12 @@ namespace QWadMaker.Settings
         }
 
 
-        private static bool TryParseTextureType(string str, out TextureType textureType)
+        private static bool TryParseTextureType(string str, out LumpType textureType)
         {
             switch (str)
             {
-                case "qpic": textureType = TextureType.SimpleTexture; return true;
-                case "font": textureType = TextureType.Font; return true;
+                case "qpic": textureType = LumpType.SimpleTexture; return true;
+                case "font": textureType = LumpType.Font; return true;
                 default: textureType = default; return false;
             }
         }

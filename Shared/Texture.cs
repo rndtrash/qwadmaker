@@ -2,14 +2,18 @@
 
 namespace Shared
 {
-    public enum TextureType : byte
+    public enum LumpType : byte
     {
+        Palette = 0x40,
+        // TODO: Quake-specific lump types
         SimpleTexture = 0x42,
         MipmapTexture = 0x43,
         Font = 0x46,
     }
 
     /// <summary>
+    /// TODO: edit the docs for Quake-specific prefixes
+    /// 
     /// Half-Life textures use a palette of 256 colors.
     /// 
     /// Certain effects can be created by starting a texture name with one of the following characters:
@@ -41,7 +45,7 @@ namespace Shared
             if (mipmap3Data != null && mipmap3Data.Length != width * height / 64) throw new ArgumentException("Mipmap 3 data must be 'width/8 x height/8' bytes.", nameof(mipmap3Data));
             if (palette != null && palette.Count() > Constants.MaxPaletteSize) throw new ArgumentException($"Palette must not contain more than {Constants.MaxPaletteSize} colors.", nameof(palette));
 
-            return new Texture(TextureType.MipmapTexture, name, width, height, imageData ?? new byte[width * height], palette?.ToArray() ?? new Rgba32[Constants.MaxPaletteSize]) {
+            return new Texture(LumpType.MipmapTexture, name, width, height, imageData ?? new byte[width * height], palette?.ToArray() ?? new Rgba32[Constants.MaxPaletteSize]) {
                 Mipmap1Data = mipmap1Data ?? new byte[width * height / 4],
                 Mipmap2Data = mipmap2Data ?? new byte[width * height / 16],
                 Mipmap3Data = mipmap3Data ?? new byte[width * height / 64],
@@ -59,7 +63,7 @@ namespace Shared
             if (imageData != null && imageData.Length != width * height) throw new ArgumentException("Image data must be 'width x height' bytes.", nameof(imageData));
             if (palette != null && palette.Count() > Constants.MaxPaletteSize) throw new ArgumentException($"Palette must not contain more than {Constants.MaxPaletteSize} colors.", nameof(palette));
 
-            return new Texture(TextureType.SimpleTexture, name, width, height, imageData ?? new byte[width * height], palette?.ToArray() ?? new Rgba32[Constants.MaxPaletteSize]);
+            return new Texture(LumpType.SimpleTexture, name, width, height, imageData ?? new byte[width * height], palette?.ToArray() ?? new Rgba32[Constants.MaxPaletteSize]);
         }
 
         public static Texture CreateFont(
@@ -80,7 +84,7 @@ namespace Shared
             if (imageData != null && imageData.Length != width * height) throw new ArgumentException("Image data must be 'width x height' bytes.", nameof(imageData));
             if (palette != null && palette.Count() > Constants.MaxPaletteSize) throw new ArgumentException($"Palette must not contain more than {Constants.MaxPaletteSize} colors.", nameof(palette));
 
-            return new Texture(TextureType.Font, name, width, height, imageData ?? new byte[width * height], palette?.ToArray() ?? new Rgba32[Constants.MaxPaletteSize]) {
+            return new Texture(LumpType.Font, name, width, height, imageData ?? new byte[width * height], palette?.ToArray() ?? new Rgba32[Constants.MaxPaletteSize]) {
                 RowCount = rowCount,
                 CharHeight = charHeight,
                 CharInfos = charInfos?.ToArray() ?? new CharInfo[Constants.FontCharacterCount],
@@ -88,7 +92,7 @@ namespace Shared
         }
 
 
-        public TextureType Type { get; }
+        public LumpType Type { get; }
         public string Name { get; }
         public int Width { get; }
         public int Height { get; }
@@ -109,7 +113,7 @@ namespace Shared
         public Rgba32[] Palette { get; }
 
 
-        private Texture(TextureType type, string name, int width, int height, byte[] imageData, Rgba32[] palette)
+        private Texture(LumpType type, string name, int width, int height, byte[] imageData, Rgba32[] palette)
         {
             Type = type;
             Name = name;

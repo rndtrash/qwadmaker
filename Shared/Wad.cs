@@ -26,7 +26,8 @@
                     var textureFileSize = GetTextureFileSize(texture);
                     textureOffset += textureFileSize;
 
-                    return new Lump {
+                    return new Lump
+                    {
                         Offset = offset,
                         CompressedLength = textureFileSize,
                         FullLength = textureFileSize,
@@ -103,7 +104,7 @@
 
         private static void WriteTexture(Stream stream, Texture texture)
         {
-            if (texture.Type == TextureType.MipmapTexture)
+            if (texture.Type == LumpType.MipmapTexture)
             {
                 stream.Write(texture.Name, 16);
                 stream.Write((uint)texture.Width);
@@ -119,14 +120,14 @@
                 stream.Write(texture.Mipmap3Data);
 
                 stream.Write((ushort)texture.Palette.Length);
-                if (texture.Type == TextureType.MipmapTexture)
+                if (texture.Type == LumpType.MipmapTexture)
                 {
                     foreach (var color in texture.Palette)
                         stream.Write(color);
                 }
                 stream.Write(new byte[StreamExtensions.RequiredPadding(2 + texture.Palette.Length * 3, 4)]);
             }
-            else if (texture.Type == TextureType.Font)
+            else if (texture.Type == LumpType.Font)
             {
                 stream.Write((uint)texture.Width);
                 stream.Write((uint)texture.Height);
@@ -145,7 +146,7 @@
                     stream.Write(color);
                 stream.Write(new byte[StreamExtensions.RequiredPadding(2 + texture.Palette.Length * 3, 4)]);
             }
-            else if (texture.Type == TextureType.SimpleTexture)
+            else if (texture.Type == LumpType.SimpleTexture)
             {
                 stream.Write((uint)texture.Width);
                 stream.Write((uint)texture.Height);
@@ -171,7 +172,7 @@
             lump.FullLength = stream.ReadUint();
 
             var types = stream.ReadBytes(4);    // 2 type bytes + padding.
-            lump.Type = (TextureType)types[0];
+            lump.Type = (LumpType)types[0];
             lump.CompressionType = types[1];
 
             lump.Name = stream.ReadString(16);
@@ -182,7 +183,7 @@
         {
             stream.Seek(lump.Offset, SeekOrigin.Begin);
 
-            if (lump.Type == TextureType.MipmapTexture)
+            if (lump.Type == LumpType.MipmapTexture)
             {
                 var name = stream.ReadString(16);
                 var width = (int)stream.ReadUint();
@@ -211,7 +212,7 @@
 
                 return Texture.CreateMipmapTexture(name, width, height, imageData, palette, mipmap1Data, mipmap2Data, mipmap3Data);
             }
-            else if (lump.Type == TextureType.Font)
+            else if (lump.Type == LumpType.Font)
             {
                 // Supposedly the width of the image, but in gfx.wad this contains the same value as the row-height field. The actual width seems to always be 256.
                 stream.ReadUint();
@@ -232,7 +233,7 @@
 
                 return Texture.CreateFont(lump.Name, width, height, rowCount, charHeight, charInfos, imageData, palette);
             }
-            else if (lump.Type == TextureType.SimpleTexture)
+            else if (lump.Type == LumpType.SimpleTexture)
             {
                 var width = (int)stream.ReadUint();
                 var height = (int)stream.ReadUint();
@@ -253,7 +254,7 @@
 
         private static uint GetTextureFileSize(Texture texture)
         {
-            if (texture.Type == TextureType.MipmapTexture)
+            if (texture.Type == LumpType.MipmapTexture)
             {
                 var size = 40;
                 size += texture.ImageData.Length;
@@ -265,7 +266,7 @@
                 size += StreamExtensions.RequiredPadding(2 + texture.Palette.Length * 3, 4);
                 return (uint)size;
             }
-            else if (texture.Type == TextureType.Font)
+            else if (texture.Type == LumpType.Font)
             {
                 var size = 16;
                 size += texture.CharInfos!.Length * 4;
@@ -275,7 +276,7 @@
                 size += StreamExtensions.RequiredPadding(2 + texture.Palette.Length * 3, 4);
                 return (uint)size;
             }
-            else if (texture.Type == TextureType.SimpleTexture)
+            else if (texture.Type == LumpType.SimpleTexture)
             {
                 var size = 8;
                 size += texture.ImageData.Length;
@@ -296,7 +297,7 @@
             public uint Offset { get; set; }
             public uint CompressedLength { get; set; }
             public uint FullLength { get; set; }
-            public TextureType Type { get; set; }
+            public LumpType Type { get; set; }
             public byte CompressionType { get; set; }   // Always set to 0 (no compression).
             public string Name { get; set; } = "";      // 16 bytes.
         }
