@@ -24,7 +24,7 @@ namespace QWadMaker
         private const int FirstFullbrightPaletteIndex = 224;
 
 
-        public static void ExtractTextures(string inputFilePath, string? inputPalettePath, string outputDirectory, ExtractionSettings settings, Logger logger)
+        public static void ExtractTextures(string inputFilePath, string? inputPalettePath, string outputDirectory, ExtractionSettings settings, Logger logger, int threads = -1)
         {
             var stopwatch = Stopwatch.StartNew();
 
@@ -52,7 +52,7 @@ namespace QWadMaker
 
             // TODO: Implement the Quake-specific code
             var isDecalsWad = Path.GetFileName(inputFilePath).Equals("decals.wad", StringComparison.InvariantCultureIgnoreCase);
-            foreach (var texture in textures)
+            Parallel.ForEach(textures, new ParallelOptions() { MaxDegreeOfParallelism = threads }, texture =>
             {
                 var isFullbrightTexture = !isDecalsWad && TextureName.IsFullbright(texture.Name);
 
@@ -82,7 +82,7 @@ namespace QWadMaker
                             {
                                 var indexedImage = new IndexedImage(textureData, texture.Width >> mipmap, texture.Height >> mipmap, palette);
                                 ImageFileIO.SaveIndexedImage(indexedImage, filePath, settings.OutputFormat);
-                                imageFilesCreated += 1;
+                                Interlocked.Increment(ref imageFilesCreated);
                             }
                         }
                         else
@@ -94,7 +94,7 @@ namespace QWadMaker
                                 if (image != null)
                                 {
                                     ImageFileIO.SaveImage(image, filePath, settings.OutputFormat);
-                                    imageFilesCreated += 1;
+                                    Interlocked.Increment(ref imageFilesCreated);
                                 }
                             }
 
@@ -114,7 +114,7 @@ namespace QWadMaker
                                 if (image != null)
                                 {
                                     ImageFileIO.SaveImage(image, fullbrightFilePath, settings.OutputFormat);
-                                    imageFilesCreated += 1;
+                                    Interlocked.Increment(ref imageFilesCreated);
                                 }
                             }
                         }
@@ -124,7 +124,7 @@ namespace QWadMaker
                         logger.Log($"- ERROR: failed to extract '{texture.Name}'{(mipmap > 0 ? $" (mipmap {mipmap})" : "")}: {ex.GetType().Name}: '{ex.Message}'.");
                     }
                 }
-            }
+            });
 
             logger.Log($"Extracted {imageFilesCreated} images from {textures.Count} textures from '{inputFilePath}' to '{outputDirectory}', in {stopwatch.Elapsed.TotalSeconds:0.000} seconds.");
         }

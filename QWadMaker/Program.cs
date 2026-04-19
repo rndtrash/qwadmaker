@@ -71,6 +71,15 @@ namespace QWadMaker
                 RootCommand rootCommand = new("QWadMaker - a command line tool to create, modify and extract the Quake WADs");
 
                 #region Common parameters
+                Option<int> maxThreads = new("--threads")
+                {
+                    Description = "Amount of threads used by the program, might bring a 10x speedup on big .wads. Not limited by default",
+                    Recursive = true,
+                    Aliases = { "-j" },
+                    DefaultValueFactory = result => -1
+                };
+                rootCommand.Add(maxThreads);
+
                 Option<bool> disableFileLogging = new("--nologfile")
                 {
                     Description = "Disables logging to a file (parent-directory\\wadmaker.log)",
@@ -173,7 +182,7 @@ namespace QWadMaker
                                     OutputFormat = result.GetValue(outputImageFormat),
                                     SaveAsIndexed = result.GetValue(extractAsIndexed),
                                 };
-                                TextureExtracting.ExtractTextures(input, inputPalette, outputFolder, extractionSettings, logger);
+                                TextureExtracting.ExtractTextures(input, inputPalette, outputFolder, extractionSettings, logger, result.GetRequiredValue(maxThreads));
                             }
                         }
                     });

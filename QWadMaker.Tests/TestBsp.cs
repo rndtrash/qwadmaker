@@ -32,7 +32,8 @@ public sealed class TestBsp
             OutputFormat = Shared.FileFormats.ImageFormat.Png,
             SaveAsIndexed = true,
         };
-        TextureExtracting.ExtractTextures(GetDataPath("quake_minimal.bsp"), null, outputPath, extractionSettings, Logger);
+        // Running in a single thread
+        TextureExtracting.ExtractTextures(GetDataPath("quake_minimal.bsp"), null, outputPath, extractionSettings, Logger, 1);
 
         // Check that both the reference folder and the output folder have the exact same set of files
         var targetTexturePaths = Directory.GetFiles(GetDataPath("bsp_textures"));
