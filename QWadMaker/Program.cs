@@ -60,6 +60,22 @@ namespace QWadMaker
                 LogFile?.WriteLine(message);
             }
 
+            #region Drag-and-Drop Support
+            if (args.Length == 1)
+            {
+                var path = args[0];
+                if (File.Exists(path))
+                {
+                    if (path.EndsWith(".bsp", StringComparison.InvariantCultureIgnoreCase) || path.EndsWith(".wad", StringComparison.InvariantCultureIgnoreCase))
+                    {
+                        args = ["extract", path];
+                    }
+                    // TODO: other single-file commands?
+                }
+                // TODO: Make .wad
+            }
+            #endregion
+
             try
             {
                 var assemblyName = typeof(Program).Assembly.GetName();
