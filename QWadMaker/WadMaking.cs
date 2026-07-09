@@ -13,7 +13,7 @@ namespace QWadMaker
 {
     public static class WadMaking
     {
-        public static void MakeWad(string inputDirectory, string outputWadFilePath, bool doFullRebuild, bool includeSubDirectories, Logger logger)
+        public static void MakeWad(string inputDirectory, string inputPalette, string outputWadFilePath, bool doFullRebuild, bool includeSubDirectories, Logger logger)
         {
             if (File.Exists(inputDirectory))
                 throw new InvalidUsageException("Unable to create or update wad file: the input must be a directory, not a file.");

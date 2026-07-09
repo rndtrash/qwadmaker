@@ -72,7 +72,10 @@ namespace QWadMaker
                     }
                     // TODO: other single-file commands?
                 }
-                // TODO: Make .wad
+                if (Directory.Exists(path))
+                {
+                    args = ["make", path];
+                }
             }
             #endregion
 
@@ -89,7 +92,7 @@ namespace QWadMaker
                 #region Common parameters
                 Option<int> maxThreads = new("--threads")
                 {
-                    Description = "Amount of threads used by the program, might bring a 10x speedup on big .wads. Not limited by default",
+                    Description = "Amount of threads used by the program, might bring a 10x speedup when extracting big .wads. Utilised only by some subcommands. Not limited by default",
                     Recursive = true,
                     Aliases = { "-j" },
                     DefaultValueFactory = result => -1
@@ -207,6 +210,60 @@ namespace QWadMaker
                 }
                 #endregion
 
+                #region Make/create/update subcommand
+                {
+                    Command make = new("make", "Make a new .wad texture pack")
+                    {
+                        Aliases = { "create", "update" }
+                    };
+
+                    Argument<string> inputFolderPath = new("input-folder")
+                    {
+                        Description = "Path to a folder with all the textures",
+                        Arity = ArgumentArity.ExactlyOne
+                    };
+                    make.Add(inputFolderPath);
+
+                    Argument<string> outputFilePath = new("output")
+                    {
+                        Description = "Name of a .wad file that you want to create or update. Named after the input folder by default",
+                        Arity = ArgumentArity.ZeroOrOne
+                    };
+                    make.Add(outputFilePath);
+
+                    Option<string> inputPalettePath = new("--palette")
+                    {
+                        Description = "Path to the input .lmp palette. By default the program looks for a file called \"palette.lmp\" in the input folder, and if it's not present, the default Quake palette is used instead."
+                    };
+                    make.Add(inputPalettePath);
+
+                    Option<bool> recursive = new("--recursive")
+                    {
+                        Description = "Look for texture files in the sub-directories",
+                        Aliases = { "-r", "--subdirs" }
+                    };
+                    make.Add(recursive);
+
+                    Option<bool> fullRebuild = new("--force-rebuild")
+                    {
+                        Description = "If a .wad file already exists, replace the file instead of just updating the existing textures"
+                    };
+                    make.Add(fullRebuild);
+
+                    make.SetAction(result =>
+                    {
+                        var inputFolder = result.GetRequiredValue(inputFolderPath);
+                        var inputPalette = result.GetValue(inputPalettePath) ?? Path.Combine(inputFolder, "palette.lmp");
+                        var output = result.GetValue(outputFilePath) ?? $"{Path.GetFileName(inputFolder)}.wad";
+
+                        SetupLogging(result, inputFolder);
+                        WadMaking.MakeWad(inputFolder, inputPalette, output, result.GetValue(fullRebuild), result.GetValue(recursive), logger);
+                    });
+
+                    rootCommand.Subcommands.Add(make);
+                }
+                #endregion
+
                 #region Embed subcommand
                 {
                     Command embed = new("embed", "Embed textures into a .bsp");
@@ -272,18 +329,6 @@ namespace QWadMaker
                 }
                 #endregion
 
-                Option<bool> fullRebuild = new("--full")
-                {
-                    Description = "Forces a full rebuild instead of an incremental one"
-                };
-                rootCommand.Add(fullRebuild);
-
-                Option<bool> includeSubdirs = new("--subdirs")
-                {
-                    Description = "Recursively include images in sub-directories"
-                };
-                rootCommand.Add(includeSubdirs);
-
                 var parseResult = rootCommand.Parse(args);
                 if (parseResult.Errors.Count > 0)
                 {
@@ -295,38 +340,6 @@ namespace QWadMaker
                 }
 
                 return parseResult.Invoke();
-
-                var settings = new ProgramSettings()
-                {
-                    FullRebuild = parseResult.GetValue(fullRebuild),
-                    IncludeSubDirectories = parseResult.GetValue(includeSubdirs),
-                    //ExtractMipmaps = parseResult.GetValue(extractMipmaps),
-                    //NoFullbrightMasks = parseResult.GetValue(noFullbrightMasks),
-                    //OverwriteExistingFiles = parseResult.GetValue(overwriteExistingFiles),
-                    //OutputImageFormat = parseResult.GetValue(outputImageFormat),
-                    //ExtractAsIndexed = parseResult.GetValue(extractAsIndexed),
-                    //RemoveEmbeddedTextures = parseResult.GetValue(removeEmbeddedTextures),
-                    DisableFileLogging = parseResult.GetValue(disableFileLogging)
-                };
-
-                /*
-                {
-                    // Wad making requires a directory path, and optionally an output wad file path:
-                    settings.InputDirectory = args[index++];
-
-                    if (index < args.Length)
-                        settings.OutputFilePath = args[index++];
-                    else
-                        settings.OutputFilePath = $"{Path.GetFileName(settings.InputDirectory)}.wad";
-
-                    if (!Path.IsPathRooted(settings.OutputFilePath))
-                        settings.OutputFilePath = Path.Combine(Path.GetDirectoryName(settings.InputDirectory) ?? "", settings.OutputFilePath);
-                }
-                */
-                // TODO: Making WADs
-                {
-                    WadMaking.MakeWad(settings.InputDirectory!, settings.OutputFilePath!, settings.FullRebuild, settings.IncludeSubDirectories, logger);
-                }
             }
             catch (InvalidUsageException ex)
             {
