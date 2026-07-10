@@ -18,23 +18,16 @@ namespace QWadMaker.Settings
         const string ConfigFilename = "qwadmaker.config";
 
 
-        class Rule
+        class Rule(int order, string namePattern, TextureSettings textureSettings)
         {
-            public int Order { get; }
-            public string NamePattern { get; }
-            public TextureSettings TextureSettings { get; }
-
-            public Rule(int order, string namePattern, TextureSettings textureSettings)
-            {
-                Order = order;
-                NamePattern = namePattern;
-                TextureSettings = textureSettings;
-            }
+            public int Order { get; } = order;
+            public string NamePattern { get; } = namePattern;
+            public TextureSettings TextureSettings { get; } = textureSettings;
         }
 
 
-        private Dictionary<string, Rule[]> _exactRules = new();
-        private List<(Regex, Rule[])> _wildcardRules = new();
+        private Dictionary<string, Rule[]> _exactRules = [];
+        private List<(Regex, Rule[])> _wildcardRules = [];
 
 
         /// <summary>

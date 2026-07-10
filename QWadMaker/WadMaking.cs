@@ -13,14 +13,14 @@ namespace QWadMaker
 {
     public static class WadMaking
     {
-        public static void MakeWad(string inputDirectory, string inputPalette, string outputWadFilePath, bool doFullRebuild, bool includeSubDirectories, Logger logger)
+        public static void MakeWad(string inputDirectory, string? inputPalette, string outputWadFilePath, bool doFullRebuild, bool includeSubDirectories, Logger logger)
         {
             if (File.Exists(inputDirectory))
                 throw new InvalidUsageException("Unable to create or update wad file: the input must be a directory, not a file.");
             else if (!Directory.Exists(inputDirectory))
                 throw new InvalidUsageException($"Unable to create or update wad file: the input directory '{inputDirectory}' does not exist.");
 
-            if (Path.GetExtension(outputWadFilePath).ToLowerInvariant() != ".wad")
+            if (!Path.GetExtension(outputWadFilePath).Equals(".wad", StringComparison.InvariantCultureIgnoreCase))
                 throw new InvalidUsageException($"Unable to create or update wad file: the output must be a .wad file.");
             else if (Directory.Exists(outputWadFilePath))
                 throw new InvalidUsageException($"The output must be a file, not a directory.");
@@ -28,12 +28,23 @@ namespace QWadMaker
 
             var stopwatch = Stopwatch.StartNew();
 
+            var fallbackPalette = Path.Combine(inputDirectory, "palette.lmp");
+            if (inputPalette == null && File.Exists(fallbackPalette))
+            {
+                inputPalette = fallbackPalette;
+            }
+
+            var palette = Palette.DefaultQuakePalette;
+            if (inputPalette != null)
+            {
+                palette = Palette.Read(inputPalette);
+            }
+
             // We can do an incremental build if we have information about the previous build operation, and if the output file matches the output of that build operation:
             var wadMakingHistory = WadMakingHistory.Load(inputDirectory);
-            var doIncrementalUpdate = !doFullRebuild && File.Exists(outputWadFilePath) && wadMakingHistory != null && wadMakingHistory.OutputFile.HasMatchingFileHash(outputWadFilePath);
+            var doIncrementalUpdate = !doFullRebuild && File.Exists(outputWadFilePath) && wadMakingHistory != null && wadMakingHistory.OutputFile.HasMatchingFileHash(outputWadFilePath) && wadMakingHistory.Palette.SequenceEqual(palette);
 
-            // TODO: Quake palette
-            var wad = doIncrementalUpdate ? LoadWad(outputWadFilePath, logger) : new Wad([], []);
+            var wad = doIncrementalUpdate ? LoadWad(outputWadFilePath, inputPalette, logger) : new Wad([], []);
             var wadMakingSettings = WadMakingSettings.Load(inputDirectory);
 
             var conversionOutputDirectory = ExternalConversion.GetConversionOutputDirectory(inputDirectory);
@@ -85,7 +96,7 @@ namespace QWadMaker
                         try
                         {
                             // Build the texture and add it to the wad file:
-                            var texture = MakeTexture(textureName, textureSourceFiles, conversionOutputDirectory, isDecalsWad, logger);
+                            var texture = MakeTexture(textureName, textureSourceFiles, palette, conversionOutputDirectory, isDecalsWad, logger);
                             if (texture is null)
                             {
                                 isValid = false;
@@ -150,7 +161,7 @@ namespace QWadMaker
                 wad.Save(outputWadFilePath);
 
                 // Also save information about this build operation, to enable future incremental updates:
-                var newHistory = new WadMakingHistory(FileInfo.FromFile(outputWadFilePath), successfulTextureInputs);
+                var newHistory = new WadMakingHistory(FileInfo.FromFile(outputWadFilePath), palette, successfulTextureInputs);
                 newHistory.Save(inputDirectory);
             }
             finally
@@ -321,7 +332,7 @@ namespace QWadMaker
             return false;
         }
 
-        private static Texture? MakeTexture(string textureName, TextureSourceFileInfo[] sourceFiles, string conversionOutputDirectory, bool isDecalsWad, Logger logger)
+        private static Texture? MakeTexture(string textureName, TextureSourceFileInfo[] sourceFiles, Rgba32[] palette, string conversionOutputDirectory, bool isDecalsWad, Logger logger)
         {
             // First gather all input files, converting any if necessary:
             var convertedSourceFiles = new List<TextureSourceFileInfo>();
@@ -358,22 +369,22 @@ namespace QWadMaker
             }
 
             // Check whether all required files have been provided, and that there are no duplicate input files:
-            var isValid = VerifyTextureSourceFiles(textureName, convertedSourceFiles.ToArray(), logger);
+            var isValid = VerifyTextureSourceFiles(textureName, [.. convertedSourceFiles], logger);
             if (!isValid)
                 return null;
 
             // Then build the texture:
             var mainFileSettings = sourceFiles.Single(file => (file.Settings.MipmapLevel ?? MipmapLevel.Main) == MipmapLevel.Main && file.Settings.IsFullbrightMask != true).Settings;
-            switch (mainFileSettings.TextureType)
+            return mainFileSettings.TextureType switch
             {
-                default:
-                case LumpType.MipmapTexture: return CreateMipmapTextureFromSourceFiles(textureName, [.. convertedSourceFiles], isDecalsWad, logger);
-                case LumpType.SimpleTexture: return CreateSimpleTextureFromSourceFiles(textureName, [.. convertedSourceFiles], logger);
-                case LumpType.Font: return CreateFontTextureFromSourceFiles(textureName, [.. convertedSourceFiles], logger);
-            }
+                LumpType.MipmapTexture or null => CreateMipmapTextureFromSourceFiles(textureName, [.. convertedSourceFiles], palette, isDecalsWad, logger),
+                LumpType.SimpleTexture => CreateSimpleTextureFromSourceFiles(textureName, [.. convertedSourceFiles], logger),
+                LumpType.Font => CreateFontTextureFromSourceFiles(textureName, [.. convertedSourceFiles], logger),
+                _ => throw new NotImplementedException($"No implementation for the {mainFileSettings.TextureType} lump")
+            };
         }
 
-        private static Texture CreateMipmapTextureFromSourceFiles(string textureName, TextureSourceFileInfo[] sourceFiles, bool isDecalsWad, Logger logger)
+        private static Texture CreateMipmapTextureFromSourceFiles(string textureName, TextureSourceFileInfo[] sourceFiles, Rgba32[] palette, bool isDecalsWad, Logger logger)
         {
             var normalSourceFiles = sourceFiles.Where(file => file.Settings.IsFullbrightMask != true).ToArray();
             var mainSourceFile = normalSourceFiles.Single(file => (file.Settings.MipmapLevel ?? MipmapLevel.Main) == MipmapLevel.Main);
@@ -384,70 +395,67 @@ namespace QWadMaker
 
 
             // Load the main image, and any mipmap images:
-            using (var mainImage = ImageFileIO.LoadImage(mainSourceFile.Path))
-            using (var mipmapImages = new DisposableList<Image<Rgba32>?>(Enumerable.Repeat<Image<Rgba32>?>(null, 3)))
+            using var mainImage = ImageFileIO.LoadImage(mainSourceFile.Path);
+            using var mipmapImages = new DisposableList<Image<Rgba32>?>(Enumerable.Repeat<Image<Rgba32>?>(null, 3));
+            foreach (var sourceFile in normalSourceFiles)
             {
-                foreach (var sourceFile in normalSourceFiles)
+                var mipmapLevel = (int)(sourceFile.Settings.MipmapLevel ?? MipmapLevel.Main);
+                if (mipmapLevel > 0)
+                    mipmapImages[mipmapLevel - 1] = ImageFileIO.LoadImage(sourceFile.Path);
+            }
+
+            VerifyMipmapTextureSizes(textureName, mainImage, mipmapImages);
+
+
+            // Create the texture:
+            // TODO:
+            if (isDecalsWad)
+            {
+                return CreateDecalTexture(textureName, mainSourceFile.Settings, mainImage, mipmapImages, logger);
+            }
+            else if (TextureName.IsTransparent(textureName))
+            {
+                return CreateTransparentTexture(textureName, mainSourceFile.Settings, mainImage, mipmapImages, logger);
+            }
+            else if (TextureName.IsWater(textureName))
+            {
+                return CreateWaterTexture(textureName, mainSourceFile.Settings, mainImage, mipmapImages, logger);
+            }
+            else if (TextureName.IsFullbright(textureName) && mainSourceFile.Settings.NoFullbright != true)
+            {
+                var fullbrightSourceFiles = sourceFiles.Where(file => file.Settings.IsFullbrightMask == true).ToArray();
+                var mainFullbrightFile = fullbrightSourceFiles.SingleOrDefault(file => (file.Settings.MipmapLevel ?? MipmapLevel.Main) == MipmapLevel.Main);
+
+                // If any fullbright mask files are present, load them:
+                using var mainFullbrightImage = mainFullbrightFile is not null ? ImageFileIO.LoadImage(mainFullbrightFile.Path) : null;
+                using var fullbrightMipmapImages = new DisposableList<Image<Rgba32>?>(Enumerable.Repeat<Image<Rgba32>?>(null, 3));
+                foreach (var sourceFile in fullbrightSourceFiles)
                 {
                     var mipmapLevel = (int)(sourceFile.Settings.MipmapLevel ?? MipmapLevel.Main);
                     if (mipmapLevel > 0)
-                        mipmapImages[mipmapLevel - 1] = ImageFileIO.LoadImage(sourceFile.Path);
+                        fullbrightMipmapImages[mipmapLevel - 1] = ImageFileIO.LoadImage(sourceFile.Path);
                 }
 
-                VerifyMipmapTextureSizes(textureName, mainImage, mipmapImages);
+                if (mainFullbrightImage is not null)
+                {
+                    // Verify fullbright mask image size:
+                    if (mainFullbrightImage.Width != mainImage.Width || mainFullbrightImage.Height != mainImage.Height)
+                        throw new InvalidDataException($"Fullbright mask for '{textureName}' is {mainFullbrightImage.Width}x{mainFullbrightImage.Height}, which does not match the main texture image: {mainImage.Width}x{mainImage.Height}.");
 
-
-                // Create the texture:
-                if (isDecalsWad)
-                {
-                    return CreateDecalTexture(textureName, mainSourceFile.Settings, mainImage, mipmapImages, logger);
-                }
-                else if (TextureName.IsTransparent(textureName))
-                {
-                    return CreateTransparentTexture(textureName, mainSourceFile.Settings, mainImage, mipmapImages, logger);
-                }
-                else if (TextureName.IsWater(textureName))
-                {
-                    return CreateWaterTexture(textureName, mainSourceFile.Settings, mainImage, mipmapImages, logger);
-                }
-                else if (TextureName.IsFullbright(textureName) && mainSourceFile.Settings.NoFullbright != true)
-                {
-                    var fullbrightSourceFiles = sourceFiles.Where(file => file.Settings.IsFullbrightMask == true).ToArray();
-                    var mainFullbrightFile = fullbrightSourceFiles.SingleOrDefault(file => (file.Settings.MipmapLevel ?? MipmapLevel.Main) == MipmapLevel.Main);
-
-                    // If any fullbright mask files are present, load them:
-                    using (var mainFullbrightImage = mainFullbrightFile is not null ? ImageFileIO.LoadImage(mainFullbrightFile.Path) : null)
-                    using (var fullbrightMipmapImages = new DisposableList<Image<Rgba32>?>(Enumerable.Repeat<Image<Rgba32>?>(null, 3)))
+                    // Verify fullbright mipmap sizes:
+                    for (int i = 1; i < fullbrightMipmapImages.Count; i++)
                     {
-                        foreach (var sourceFile in fullbrightSourceFiles)
-                        {
-                            var mipmapLevel = (int)(sourceFile.Settings.MipmapLevel ?? MipmapLevel.Main);
-                            if (mipmapLevel > 0)
-                                fullbrightMipmapImages[mipmapLevel - 1] = ImageFileIO.LoadImage(sourceFile.Path);
-                        }
-
-                        if (mainFullbrightImage is not null)
-                        {
-                            // Verify fullbright mask image size:
-                            if (mainFullbrightImage.Width != mainImage.Width || mainFullbrightImage.Height != mainImage.Height)
-                                throw new InvalidDataException($"Fullbright mask for '{textureName}' is {mainFullbrightImage.Width}x{mainFullbrightImage.Height}, which does not match the main texture image: {mainImage.Width}x{mainImage.Height}.");
-
-                            // Verify fullbright mipmap sizes:
-                            for (int i = 1; i < fullbrightMipmapImages.Count; i++)
-                            {
-                                var fullbrightMipmapImage = fullbrightMipmapImages[i - 1];
-                                if (fullbrightMipmapImage is not null && (fullbrightMipmapImage.Width != mainImage.Width >> i || fullbrightMipmapImage.Height != mainImage.Height >> i))
-                                    throw new InvalidDataException($"Fullbright mipmap {i} for texture '{textureName}' is {fullbrightMipmapImage.Width}x{fullbrightMipmapImage.Height} but should be {mainImage.Width >> i}x{mainImage.Height >> i}.");
-                            }
-                        }
-
-                        return CreateFullbrightTexture(textureName, mainSourceFile.Settings, mainImage, mipmapImages, mainFullbrightImage, fullbrightMipmapImages, logger);
+                        var fullbrightMipmapImage = fullbrightMipmapImages[i - 1];
+                        if (fullbrightMipmapImage is not null && (fullbrightMipmapImage.Width != mainImage.Width >> i || fullbrightMipmapImage.Height != mainImage.Height >> i))
+                            throw new InvalidDataException($"Fullbright mipmap {i} for texture '{textureName}' is {fullbrightMipmapImage.Width}x{fullbrightMipmapImage.Height} but should be {mainImage.Width >> i}x{mainImage.Height >> i}.");
                     }
                 }
-                else
-                {
-                    return CreateNormalTexture(textureName, mainSourceFile.Settings, mainImage, mipmapImages, logger);
-                }
+
+                return CreateFullbrightTexture(textureName, mainSourceFile.Settings, mainImage, mipmapImages, mainFullbrightImage, fullbrightMipmapImages, logger);
+            }
+            else
+            {
+                return CreateNormalTexture(textureName, mainSourceFile.Settings, mainImage, mipmapImages, palette, logger);
             }
         }
 
@@ -483,9 +491,7 @@ namespace QWadMaker
                 if (isDecalsWad)
                 {
                     var decalColor = resizePalette[Constants.MaxPaletteSize - 1];
-                    resizePalette = Enumerable.Range(0, Constants.MaxPaletteSize)
-                        .Select(i => new Rgba32(decalColor.R, decalColor.G, decalColor.B, (byte)i))
-                        .ToArray();
+                    resizePalette = [.. Enumerable.Range(0, Constants.MaxPaletteSize).Select(i => new Rgba32(decalColor.R, decalColor.G, decalColor.B, (byte)i))];
                 }
                 else if (TextureName.IsTransparent(textureName))
                 {
@@ -501,7 +507,7 @@ namespace QWadMaker
                 var colorIndexMappingCache = new Dictionary<Rgba32, int>();
                 var isAnimatedTexture = TextureName.IsAnimated(textureName);
                 var transparencyThreshold = Math.Clamp(mainSourceFile.Settings.TransparencyThreshold ?? Constants.DefaultTransparencyThreshold, 0, 255);
-                Func<Rgba32, bool> isTransparentPredicate = color => color.A < transparencyThreshold;
+                bool isTransparentPredicate(Rgba32 color) => color.A < transparencyThreshold;
 
                 for (int i = 0; i < indexedMipmapImages.Length; i++)
                 {
@@ -545,7 +551,7 @@ namespace QWadMaker
 
             var mainTextureData = CreateDecalTextureData(mainImage);
             var mipmapTextureData = mipmaps
-                .Select(CreateDecalTextureData!)
+                .Select(CreateDecalTextureData)
                 .ToArray();
 
             return Texture.CreateMipmapTexture(
@@ -582,16 +588,12 @@ namespace QWadMaker
             var colorClusters = ColorQuantization.GetColorClusters(colorHistogram, maxColors);
             if (colorClusters.Length < maxColors)
             {
-                colorClusters = colorClusters
-                    .Concat(Enumerable.Range(0, maxColors - colorClusters.Length).Select(i => (new Rgba32(), new[] { new Rgba32() })))
-                    .ToArray();
+                colorClusters = [.. colorClusters, .. Enumerable.Range(0, maxColors - colorClusters.Length).Select(i => (new Rgba32(), new[] { new Rgba32() }))];
             }
 
             // The last palette slot is reserved for transparent areas:
             var colorKey = new Rgba32(0, 0, 255);
-            colorClusters = colorClusters
-                .Append((colorKey, new[] { colorKey }))         // Slot 255: used for transparent pixels
-                .ToArray();
+            colorClusters = [.. colorClusters, (colorKey, new[] { colorKey })];// Slot 255: used for transparent pixels
 
             // Create the actual palette, and a color index lookup cache:
             var palette = colorClusters.Select(cluster => cluster.averageColor).ToArray();
@@ -633,19 +635,17 @@ namespace QWadMaker
             var colorClusters = ColorQuantization.GetColorClusters(colorHistogram, maxColors);
             if (colorClusters.Length < maxColors)
             {
-                colorClusters = colorClusters
-                    .Concat(Enumerable.Range(0, maxColors - colorClusters.Length).Select(i => (new Rgba32(), new[] { new Rgba32() })))
-                    .ToArray();
+                colorClusters = [.. colorClusters, .. Enumerable.Range(0, maxColors - colorClusters.Length).Select(i => (new Rgba32(), new[] { new Rgba32() }))];
             }
 
             // The 3rd and 4th palette slots are reserved for water fog color and intensity:
             var fogColor = textureSettings.WaterFogColor ?? ColorQuantization.GetAverageColor(colorHistogram);
             var fogIntensity = new Rgba32((byte)Math.Clamp(textureSettings.WaterFogColor?.A ?? (int)((1f - GetBrightness(fogColor)) * 255), 0, 255), 0, 0);
-            colorClusters = colorClusters.Take(3)
-                .Append((fogColor, new[] { fogColor }))         // Slot 3: water fog color
-                .Append((fogIntensity, new[] { fogIntensity })) // Slot 4: fog intensity (stored in red channel)
-                .Concat(colorClusters.Skip(3))
-                .ToArray();
+            colorClusters = [.. colorClusters.Take(3),
+                // Slot 3: water fog color
+                (fogColor, new[] { fogColor }),
+                // Slot 4: fog intensity (stored in red channel)
+                (fogIntensity, new[] { fogIntensity }), .. colorClusters.Skip(3)];
 
             // Create the actual palette, and a color index lookup cache:
             var palette = colorClusters.Select(cluster => cluster.averageColor).ToArray();
@@ -678,29 +678,28 @@ namespace QWadMaker
                 mipmap3Data: mipmapTextureData[2]);
         }
 
-        private static Texture CreateNormalTexture(string textureName, TextureSettings textureSettings, Image<Rgba32> mainImage, IReadOnlyList<Image<Rgba32>?> mipmapImages, Logger logger)
+        private static Texture CreateNormalTexture(string textureName, TextureSettings textureSettings, Image<Rgba32> mainImage, IReadOnlyList<Image<Rgba32>?> mipmapImages, Rgba32[] palette, Logger logger)
         {
             // Create the palette, and make sure we end up with a 256-color palette (some tools can't handle smaller palettes):
-            var maxColors = Constants.MaxPaletteSize;
+            // TODO:
+            //var maxColors = Constants.MaxPaletteSize;
             var images = new[] { mainImage }.Concat(mipmapImages.Where(image => image != null));
-            var colorHistogram = ColorQuantization.GetColorHistogram(images!, color => false);
-            var colorClusters = ColorQuantization.GetColorClusters(colorHistogram, maxColors);
-            if (colorClusters.Length < maxColors)
-            {
-                colorClusters = colorClusters
-                    .Concat(Enumerable.Range(0, maxColors - colorClusters.Length).Select(i => (new Rgba32(), new[] { new Rgba32() })))
-                    .ToArray();
-            }
+            //var colorHistogram = ColorQuantization.GetColorHistogram(images!, color => false);
+            //var colorClusters = ColorQuantization.GetColorClusters(colorHistogram, maxColors);
+            //if (colorClusters.Length < maxColors)
+            //{
+            //    colorClusters = [.. colorClusters, .. Enumerable.Range(0, maxColors - colorClusters.Length).Select(i => (new Rgba32(), new[] { new Rgba32() }))];
+            //}
 
             // Create the actual palette, and a color index lookup cache:
-            var palette = colorClusters.Select(cluster => cluster.averageColor).ToArray();
+            //var palette = colorClusters.Select(cluster => cluster.averageColor).ToArray();
             var colorIndexMappingCache = new Dictionary<Rgba32, int>();
-            for (int i = 0; i < colorClusters.Length; i++)
-            {
-                (_, var colors) = colorClusters[i];
-                foreach (var color in colors)
-                    colorIndexMappingCache[color] = i;
-            }
+            //for (int i = 0; i < colorClusters.Length; i++)
+            //{
+            //    (_, var colors) = colorClusters[i];
+            //    foreach (var color in colors)
+            //        colorIndexMappingCache[color] = i;
+            //}
 
             // Create any missing mipmaps:
             var mipmaps = mipmapImages
@@ -963,7 +962,7 @@ namespace QWadMaker
             Func<Rgba32, bool> isTransparent,
             bool disableDithering)
         {
-            var getColorIndex = ColorQuantization.CreateColorIndexLookup(palette, colorIndexMappingCache, isTransparent);
+            var getColorIndex = ColorQuantization.CreateColorIndexLookup(palette, colorIndexMappingCache, isTransparent, textureSettings.UseFullbright ?? false);
             var ditheringAlgorithm = textureSettings.DitheringAlgorithm ?? (disableDithering ? DitheringAlgorithm.None : DitheringAlgorithm.FloydSteinberg);
             return ditheringAlgorithm switch
             {
@@ -987,7 +986,7 @@ namespace QWadMaker
 
             // First create texture data for normal pixels:
             var normalPalette = palette.Take(maxNormalColors).ToArray();
-            var getNormalColorIndex = ColorQuantization.CreateColorIndexLookup(normalPalette, normalColorIndexMappingCache, color => false);
+            var getNormalColorIndex = ColorQuantization.CreateColorIndexLookup(normalPalette, normalColorIndexMappingCache, color => false, true);
             byte[] textureData;
             switch (ditheringAlgorithm)
             {
@@ -1005,7 +1004,7 @@ namespace QWadMaker
             {
                 // If a fullbright mask is provided, create texture data for fullbright pixels:
                 var fullbrightPalette = palette.Skip(maxNormalColors).ToArray();
-                var getFullbrightColorIndex = ColorQuantization.CreateColorIndexLookup(fullbrightPalette, fullbrightColorIndexMappingCache, color => color.A < fullbrightAlphaThreshold);
+                var getFullbrightColorIndex = ColorQuantization.CreateColorIndexLookup(fullbrightPalette, fullbrightColorIndexMappingCache, color => color.A < fullbrightAlphaThreshold, true);
                 byte[] fullbrightTextureData = ditheringAlgorithm switch
                 {
                     DitheringAlgorithm.FloydSteinberg => Dithering.FloydSteinberg(fullbrightImage, fullbrightPalette, getFullbrightColorIndex, textureSettings.DitherScale ?? 0.75f, color => color.A < fullbrightAlphaThreshold),
@@ -1029,11 +1028,10 @@ namespace QWadMaker
         }
 
 
-        private static Wad LoadWad(string filePath, Logger logger)
+        private static Wad LoadWad(string wadFilePath, string? paletteFilePath, Logger logger)
         {
-            logger.Log($"Loading wad file: '{filePath}'.");
-            // TODO: Quake palette
-            return Wad.Load(filePath, null, (index, name, exception) => logger.Log($"- Failed to load texture #{index} ('{name}'): {exception.GetType().Name}: '{exception.Message}'."));
+            logger.Log($"Loading wad file: '{wadFilePath}'.");
+            return Wad.Load(wadFilePath, paletteFilePath, (index, name, exception) => logger.Log($"- Failed to load texture #{index} ('{name}'): {exception.GetType().Name}: '{exception.Message}'."));
         }
     }
 }

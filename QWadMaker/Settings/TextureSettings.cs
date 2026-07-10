@@ -54,6 +54,11 @@ namespace QWadMaker.Settings
         public bool? NoFullbright { get; set; }
 
         /// <summary>
+        /// Use the full-bright section of palette (the last 16 colors). Off by default
+        /// </summary>
+        public bool? UseFullbright { get; set; }
+
+        /// <summary>
         /// Fullbright mask pixels with an alpha value equal to or above this value will be treated as fullbright pixels.
         /// Defaults to <see cref="Constants.DefaultTransparencyThreshold"/>.
         /// </summary>
@@ -151,6 +156,7 @@ namespace QWadMaker.Settings
             if (overrideSettings.MipmapLevel != null)               MipmapLevel = overrideSettings.MipmapLevel;
             if (overrideSettings.IsFullbrightMask != null)          IsFullbrightMask = overrideSettings.IsFullbrightMask;
             if (overrideSettings.NoFullbright != null)              NoFullbright = overrideSettings.NoFullbright;
+            if (overrideSettings.UseFullbright != null)             UseFullbright = overrideSettings.UseFullbright;
             if (overrideSettings.FullbrightAlphaThreshold != null)  FullbrightAlphaThreshold = overrideSettings.FullbrightAlphaThreshold;
             if (overrideSettings.PreservePalette != null)           PreservePalette = overrideSettings.PreservePalette;
             if (overrideSettings.DitheringAlgorithm != null)        DitheringAlgorithm = overrideSettings.DitheringAlgorithm;
@@ -173,6 +179,7 @@ namespace QWadMaker.Settings
                 MipmapLevel == other.MipmapLevel &&
                 IsFullbrightMask == other.IsFullbrightMask &&
                 NoFullbright == other.NoFullbright &&
+                UseFullbright == other.UseFullbright &&
                 FullbrightAlphaThreshold == other.FullbrightAlphaThreshold &&
                 PreservePalette == other.PreservePalette &&
                 DitheringAlgorithm == other.DitheringAlgorithm &&

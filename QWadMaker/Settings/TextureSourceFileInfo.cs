@@ -2,15 +2,8 @@
 
 namespace QWadMaker.Settings
 {
-    class TextureSourceFileInfo : Shared.FileSystem.FileInfo
+    class TextureSourceFileInfo(string path, int fileSize, FileHash fileHash, DateTimeOffset lastModified, TextureSettings settings) : Shared.FileSystem.FileInfo(path, fileSize, fileHash, lastModified)
     {
-        public TextureSettings Settings { get; }
-
-
-        public TextureSourceFileInfo(string path, int fileSize, FileHash fileHash, DateTimeOffset lastModified, TextureSettings settings)
-            : base(path, fileSize, fileHash, lastModified)
-        {
-            Settings = settings;
-        }
+        public TextureSettings Settings { get; } = settings;
     }
 }

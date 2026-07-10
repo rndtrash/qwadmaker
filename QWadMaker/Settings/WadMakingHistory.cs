@@ -1,10 +1,11 @@
 ﻿using Shared.JSON;
+using SixLabors.ImageSharp.PixelFormats;
 using System.Text.Json;
 using FileInfo = Shared.FileSystem.FileInfo;
 
 namespace QWadMaker.Settings
 {
-    class WadMakingHistory
+    class WadMakingHistory(FileInfo outputFile, Rgba32[] palette, IDictionary<string, TextureSourceFileInfo[]> textureInputs)
     {
         private static JsonSerializerOptions SerializerOptions { get; }
 
@@ -19,15 +20,9 @@ namespace QWadMaker.Settings
         const string HistoryFilename = "qwadmaker.dat";
 
 
-        public FileInfo OutputFile { get; }
-        public Dictionary<string, TextureSourceFileInfo[]> TextureInputs { get; }
-
-
-        public WadMakingHistory(FileInfo outputFile, IDictionary<string, TextureSourceFileInfo[]> textureInputs)
-        {
-            OutputFile = outputFile;
-            TextureInputs = textureInputs.ToDictionary(kv => kv.Key, kv => kv.Value);
-        }
+        public FileInfo OutputFile { get; } = outputFile;
+        public Dictionary<string, TextureSourceFileInfo[]> TextureInputs { get; } = textureInputs.ToDictionary(kv => kv.Key, kv => kv.Value);
+        public Rgba32[] Palette { get; } = palette;
 
         public static WadMakingHistory? Load(string folder)
         {

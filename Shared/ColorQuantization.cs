@@ -33,7 +33,7 @@ namespace Shared
             var palette = colorClusters.Select(cluster => cluster.averageColor).ToArray();
 
             var colorIndexMappingCache = new Dictionary<Rgba32, int>();
-            var getColorIndex = CreateColorIndexLookup(palette, colorIndexMappingCache, isTransparent ?? (color => false));
+            var getColorIndex = CreateColorIndexLookup(palette, colorIndexMappingCache, isTransparent ?? (color => false), true); // TODO:
 
             if (ditheringAlgorithm == DitheringAlgorithm.FloydSteinberg)
             {
@@ -59,14 +59,14 @@ namespace Shared
             var uniqueColors = colorHistogram.Keys.ToHashSet();
             if (uniqueColors.Count <= maxColors)
             {
-                return uniqueColors
-                    .Select(color => (color, new[] { color }))
-                    .ToArray();
+                return [.. uniqueColors.Select(color => (color, new[] { color }))];
             }
 
 
-            var boundingBoxes = new List<ColorBoundingBox>();
-            boundingBoxes.Add(new ColorBoundingBox(uniqueColors));
+            var boundingBoxes = new List<ColorBoundingBox>
+            {
+                new(uniqueColors)
+            };
 
             while (boundingBoxes.Count < maxColors)
             {
@@ -97,9 +97,7 @@ namespace Shared
                 boundingBoxes.Add(new ColorBoundingBox(highColors));
             }
 
-            return boundingBoxes
-                .Select(box => (box.GetWeightedAverageColor(colorHistogram), box.Colors))
-                .ToArray();
+            return [.. boundingBoxes.Select(box => (box.GetWeightedAverageColor(colorHistogram), box.Colors))];
         }
 
         /// <inheritdoc cref="GetColorHistogram(IEnumerable{Image{Rgba32}}, Func{int, int, Rgba32, bool})"/>
@@ -172,7 +170,7 @@ namespace Shared
         /// Transparent colors are mapped to palette index <see cref="Constants.TransparentColorIndex"/>.
         /// NOTE: The given color index mapping dictionary is used for memoization, and will be modified (no internal copy is created for performance reasons).
         /// </summary>
-        public static Func<Rgba32, int> CreateColorIndexLookup(Rgba32[] palette, IDictionary<Rgba32, int> colorIndexMappingCache, Func<Rgba32, bool> isTransparent)
+        public static Func<Rgba32, int> CreateColorIndexLookup(Rgba32[] palette, IDictionary<Rgba32, int> colorIndexMappingCache, Func<Rgba32, bool> isTransparent, bool useFullBright)
         {
             return color =>
             {
@@ -182,7 +180,7 @@ namespace Shared
                 if (colorIndexMappingCache.TryGetValue(color, out var index))
                     return index;
 
-                index = GetNearestColorIndex(palette, color);
+                index = GetNearestColorIndex(palette, color, useFullBright);
                 colorIndexMappingCache[color] = index;
                 return index;
             };
@@ -191,11 +189,17 @@ namespace Shared
         /// <summary>
         /// Returns the index of the palette color that is closest to the given color, in RGB-space.
         /// </summary>
-        public static int GetNearestColorIndex(Rgba32[] palette, Rgba32 color)
+        public static int GetNearestColorIndex(Rgba32[] palette, Rgba32 color, bool useFullBright)
         {
             var index = 0;
             var minSquaredDistance = float.MaxValue;
-            for (int i = 0; i < palette.Length; i++)
+            var paletteSize = palette.Length;
+            if (!useFullBright)
+            {
+                paletteSize -= Constants.PaletteFullBrightSectionSize;
+            }
+
+            for (int i = 0; i < paletteSize; i++)
             {
                 var squaredDistance = SquaredDistance(palette[i], color);
                 if (squaredDistance < minSquaredDistance)
@@ -251,7 +255,7 @@ namespace Shared
 
             public ColorBoundingBox(IEnumerable<Rgba32> colors)
             {
-                Colors = colors.ToArray();
+                Colors = [.. colors];
                 if (!Colors.Any())
                     throw new ArgumentException("At least one color must be provided.", nameof(colors));
 

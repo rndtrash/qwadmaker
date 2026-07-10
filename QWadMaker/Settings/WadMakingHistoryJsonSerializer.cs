@@ -4,6 +4,7 @@ using System.Text.Json.Serialization;
 using System.Text.Json;
 using Shared.JSON;
 using FileInfo = Shared.FileSystem.FileInfo;
+using SixLabors.ImageSharp.PixelFormats;
 
 namespace QWadMaker.Settings
 {
@@ -30,6 +31,9 @@ namespace QWadMaker.Settings
             }
             writer.WriteEndObject();
 
+            writer.WritePropertyName("palette");
+            writer.WriteStringValue(Convert.ToBase64String(value.Palette.SelectMany(c => new[] { c.R, c.G, c.B }).ToArray()));
+
             writer.WriteEndObject();
         }
 
@@ -37,6 +41,7 @@ namespace QWadMaker.Settings
         {
             var outputFile = new FileInfo("", 0, new FileHash(), DateTimeOffset.MinValue);
             var textureInputs = new Dictionary<string, TextureSourceFileInfo[]>();
+            var palette = new Rgba32[Constants.MaxPaletteSize];
 
             reader.ReadStartObject();
             while (reader.TokenType != JsonTokenType.EndObject)
@@ -46,35 +51,50 @@ namespace QWadMaker.Settings
                     default: reader.SkipValue(); break;
 
                     case "output-file":
-                    {
-                        outputFile = ReadFileInfo(ref reader);
-                        break;
-                    }
+                        {
+                            outputFile = ReadFileInfo(ref reader);
+                            break;
+                        }
 
                     case "texture-inputs":
-                    {
-                        reader.ReadStartObject();
-                        while (reader.TokenType != JsonTokenType.EndObject)
                         {
-                            var key = reader.ReadPropertyName() ?? "";
+                            reader.ReadStartObject();
+                            while (reader.TokenType != JsonTokenType.EndObject)
+                            {
+                                var key = reader.ReadPropertyName() ?? "";
 
-                            var items = new List<TextureSourceFileInfo>();
-                            reader.ReadStartArray();
+                                var items = new List<TextureSourceFileInfo>();
+                                reader.ReadStartArray();
 
-                            while (reader.TokenType != JsonTokenType.EndArray)
-                                items.Add(ReadTextureSourceFileInfo(ref reader));
+                                while (reader.TokenType != JsonTokenType.EndArray)
+                                    items.Add(ReadTextureSourceFileInfo(ref reader));
 
-                            reader.ReadEndArray();
-                            textureInputs[key] = items.ToArray();
+                                reader.ReadEndArray();
+                                textureInputs[key] = [.. items];
+                            }
+                            reader.ReadEndObject();
+                            break;
                         }
-                        reader.ReadEndObject();
-                        break;
-                    }
+
+                    case "palette":
+                        {
+                            var paletteString = reader.ReadString();
+                            if (paletteString == null)
+                            {
+                                palette = Palette.DefaultQuakePalette;
+                                break;
+                            }
+
+                            var bytes = Convert.FromBase64String(paletteString);
+                            palette = Palette.From(bytes);
+
+                            break;
+                        }
                 }
             }
             reader.ReadEndObject();
 
-            return new WadMakingHistory(outputFile, textureInputs);
+            return new WadMakingHistory(outputFile, palette, textureInputs);
         }
 
 

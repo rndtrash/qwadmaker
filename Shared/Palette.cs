@@ -274,6 +274,18 @@ namespace Shared
             return Read(stream);
         }
 
+        public static Rgba32[] From(byte[] array)
+        {
+            var expectedSize = Constants.MaxPaletteSize * 3;
+            if (array.Length != expectedSize)
+            {
+                throw new Exception($"Invalid palette byte array size (Expected {expectedSize}, got {array.Length})");
+            }
+
+            using var stream = new MemoryStream(array);
+            return Read(stream);
+        }
+
         public static void Write(Stream output, Rgba32[] palette)
         {
             if (palette.Length != Constants.MaxPaletteSize)

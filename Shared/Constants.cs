@@ -3,6 +3,7 @@
     public static class Constants
     {
         public const int MaxPaletteSize = 256;
+        public const int PaletteFullBrightSectionSize = 16;
 
         public const int DefaultTransparencyThreshold = 128;
         public const int TransparentColorIndex = 255;
